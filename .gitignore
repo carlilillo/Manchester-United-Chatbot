@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+man_united_data/
+man_united_data_script/
+ingestion.log
+vectorization.log
+scrape_scripts/.cache/
+.DS_Store

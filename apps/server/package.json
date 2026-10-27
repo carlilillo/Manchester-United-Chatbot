@@ -1,0 +1,49 @@
+{
+  "name": "@united/server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node --watch -r ts-node/register src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "db:migrate": "node -r ts-node/register src/cli.ts migrate",
+    "db:revert": "node -r ts-node/register src/cli.ts revert",
+    "db:setup": "node -r ts-node/register src/cli.ts setup",
+    "ingest": "node -r ts-node/register src/cli.ts ingest",
+    "vectorize": "node -r ts-node/register src/cli.ts vectorize"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.0.0",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.0",
+    "@langchain/openai": "^1.0.0",
+    "@langchain/pgvector": "^0.1.0",
+    "@langchain/textsplitters": "^1.0.0",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/schedule": "^6.0.0",
+    "@nestjs/typeorm": "^11.0.0",
+    "@united/contracts": "workspace:*",
+    "cheerio": "^1.1.0",
+    "cookie-parser": "^1.4.7",
+    "cron": "^4.0.0",
+    "deepagents": "^1.0.0",
+    "dotenv": "^16.4.7",
+    "langchain": "^1.0.0",
+    "pg": "^8.15.0",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.25",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.8",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

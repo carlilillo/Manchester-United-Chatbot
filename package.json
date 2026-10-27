@@ -1,0 +1,17 @@
+{
+  "name": "manchester-united-chatbot",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.5.2",
+  "scripts": {
+    "dev": "pnpm --filter @united/contracts build && pnpm --parallel --filter @united/server --filter @united/client dev",
+    "build": "pnpm -r build",
+    "test": "pnpm --filter @united/contracts build && pnpm -r test",
+    "typecheck": "pnpm --filter @united/contracts build && pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @united/server db:migrate",
+    "db:revert": "pnpm --filter @united/server db:revert",
+    "db:setup": "pnpm --filter @united/server db:setup",
+    "ingest": "pnpm --filter @united/server ingest",
+    "vectorize": "pnpm --filter @united/server vectorize"
+  }
+}

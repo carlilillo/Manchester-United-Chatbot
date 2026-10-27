@@ -22,9 +22,9 @@ describe('agent model request transport', () => {
 });
 
 describe('embedding model configuration', () => {
-  it('uses the library embedding model and explicit settings without making an API call', async () => {
+  it('uses the fixed embedding model without making an API call', async () => {
     const { createEmbeddingModel } = await import('../src/agent/model/embedding-model');
-    const model = createEmbeddingModel({ model: 'text-embedding-3-large', apiKey: 'test-key' });
+    const model = createEmbeddingModel({ apiKey: 'test-key' });
     expect(model.model).toBe('text-embedding-3-large');
   });
 });

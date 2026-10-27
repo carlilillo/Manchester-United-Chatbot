@@ -16,7 +16,6 @@ const schema = z.object({
   CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
   PORT: z.coerce.number().int().default(3000),
   OPENAI_CHAT_MODEL: z.string().default('gpt-6.1-sol'),
-  OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-large'),
   INGEST_CRON: z.string().default('0 3 * * *'),
   NEWS_PAGES: z.coerce.number().int().min(1).max(100).default(20),
 });

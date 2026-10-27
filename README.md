@@ -2,7 +2,7 @@
 
 United Archive is an independent Manchester United research chat. A NestJS server runs a LangChain Deep Agent with a research subagent, retrieves club pages from PostgreSQL using `PGVectorStore`, and streams answers and visible tool activity to a Vite/React client built with shadcn AI Elements. A signed, anonymous cookie keeps each visitor's chats and editable response preferences separate.
 
-The TypeScript application ports the prompts, retrieval flow, document preparation, and source topics from `man_united_agent.ipynb` and `scrape_scripts/`. The notebook and Python scripts remain as references; the running application uses the TypeScript implementation.
+The TypeScript application ports the prompts, retrieval flow, document preparation, and source topics from `man_united_agent.ipynb` and `apps/server/scrape_scripts/`. The notebook and Python scripts remain as references; the running application uses the TypeScript implementation.
 
 ## Requirements
 
@@ -34,7 +34,7 @@ Each package has its own `tests/` directory. Run `pnpm test`, `pnpm typecheck`, 
 
 TypeORM owns `chat_users`, `chat_conversations`, `source_documents`, and `ingestion_runs`. Conversation JSONB stores only human and AI messages, the visible tool/subagent activity for AI messages, and like/dislike feedback. LangGraph's built-in `PostgresSaver` owns checkpoints, and its built-in `PostgresStore` backs Deep Agent files. Those tables are **not** TypeORM entities. The official `PGVectorStore` integration owns separate knowledge and personal-memory vector tables. Both stores are passed in the agent's runtime context; an active user-memory vector controls cross-chat response preferences only when the user enables them.
 
-Ingestion fetches official HTML pages directly, converts their main content to Markdown locally, and runs no more than two requests at once. Every successfully converted page is saved atomically to `man_united_data_script/`, using the same topic folders and relative paths as `man_united_data/` (for example, `news/pages/`, `news/articles/`, and `store/products/`). The original archive is left intact. Full source documents are upserted into `source_documents` in batches of 100 using the natural key `(path, source, type)`. Ingestion does not initialize embeddings or the chat agent. Its run record counts stored documents and records partial failures; fetch or conversion failures retain previous captures.
+Ingestion fetches official HTML pages directly, converts their main content to Markdown locally, and runs no more than two requests at once. Every successfully converted page is saved atomically to `apps/server/man_united_data_script/`, using the same topic folders and relative paths as `man_united_data/` (for example, `news/pages/`, `news/articles/`, and `store/products/`). The original archive is left intact. Full source documents are upserted into `source_documents` in batches of 100 using the natural key `(path, source, type)`. Ingestion does not initialize embeddings or the chat agent. Its run record counts stored documents and records partial failures; fetch or conversion failures retain previous captures.
 
 Topic extractors in `ingestion/topics/` handle the source site's different content formats:
 
@@ -69,7 +69,7 @@ The workflow services live in `apps/server/src/ingestion/` and `apps/server/src/
 
 Search returns up to eight `/retrieved/` excerpt paths. Agents read those paths with the built-in `read_file` tool and can search again for missing details; archive document paths are metadata rather than directly readable files. Research Subagent also has `searchSpecificFile`, which accepts one to ten exact relative archive paths in `file_paths` and returns complete Markdown with provenance or explicit missing-file messages. It reads the latest ingested database documents, which may be newer than the vector index. The orchestrator delegates known paths from topic skills directly to the researcher; use this for complete standings, schedules, news pages, rosters and membership comparisons. Topic skills describe the current sources, including rolling match windows, optional player statistics and product-only store documents. Prompts require evidence for current facts and disclosure of incomplete lists or missing capture dates.
 
-Persistent files use the namespace `united / userId / threadId`. The composite backend routes `/skills/` to the repository's skills directory, with writes denied for both agents. All other virtual files stay in the conversation's store. Model configuration remains controlled by `OPENAI_CHAT_MODEL` and `OPENAI_EMBEDDING_MODEL`.
+Persistent files use the namespace `united / userId / threadId`. The composite backend routes `/skills/` to `apps/server/skills/`, with writes denied for both agents. All other virtual files stay in the conversation's store. The chat model is configured through `OPENAI_CHAT_MODEL`. The embedding model is fixed to `text-embedding-3-large` by the `OPENAI_EMBEDDING_MODEL` constant in `apps/server/src/agent/model/embedding-model.ts`.
 
 ## API
 

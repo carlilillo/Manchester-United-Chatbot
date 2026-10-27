@@ -7,8 +7,8 @@ test-results/
 .env.*
 !.env.example
 man_united_data/
-man_united_data_script/
+apps/server/man_united_data_script/
 ingestion.log
 vectorization.log
-scrape_scripts/.cache/
+apps/server/scrape_scripts/.cache/
 .DS_Store

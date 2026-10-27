@@ -14,7 +14,7 @@ const page = {
   path: 'news/articles/united-win.md', source: 'https://www.manutd.com/en/news/detail/united-win',
   type: 'news', markdown: '# United win\n\nA strong performance from the team.',
 };
-const destination = path.resolve(__dirname, '../../../man_united_data_script', page.path);
+const destination = path.resolve(__dirname, '../man_united_data_script', page.path);
 
 function setup() {
   const repository = { create: vi.fn(value => value), save: vi.fn(async value => value) };
@@ -42,7 +42,7 @@ describe('source ingestion without embeddings', () => {
     vi.mocked(scrapeAll).mockResolvedValue(pages);
     documents.saveBatch.mockImplementation(async batch => {
       for (const source of batch) {
-        const target = path.resolve(__dirname, '../../../man_united_data_script', source.path);
+        const target = path.resolve(__dirname, '../man_united_data_script', source.path);
         expect(rename).toHaveBeenCalledWith(`${target}.tmp`, target);
       }
     });

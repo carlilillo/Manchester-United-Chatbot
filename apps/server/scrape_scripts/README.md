@@ -1,28 +1,28 @@
 # Manchester United scraping scripts
 
-These scripts recreate the data collection behind [`man_united_data`](../man_united_data/README.md). The temporary scripts from the October 4 capture had been removed, so these are maintained, project-relative versions of that workflow. Running them fetches the **current** pages, which may differ from the existing archive.
+These scripts recreate the data collection behind [`man_united_data`](../../../man_united_data/README.md). The temporary scripts from the October 4 capture had been removed, so these are maintained, project-relative versions of that workflow. Running them fetches the **current** pages, which may differ from the existing archive.
 
 ## Run
 
-From the OrderAgent project root:
+From the repository root:
 
 ```bash
-.venv/bin/python scrape_scripts/run_all.py
+.venv/bin/python apps/server/scrape_scripts/run_all.py
 ```
 
 Each scraper can also be run separately, for example:
 
 ```bash
-.venv/bin/python scrape_scripts/scrape_news.py --pages 20
-.venv/bin/python scrape_scripts/scrape_store.py
-.venv/bin/python scrape_scripts/scrape_people.py
-.venv/bin/python scrape_scripts/scrape_matches.py
-.venv/bin/python scrape_scripts/scrape_videos_travel.py
-.venv/bin/python scrape_scripts/scrape_membership.py
-.venv/bin/python scrape_scripts/scrape_standings.py
+.venv/bin/python apps/server/scrape_scripts/scrape_news.py --pages 20
+.venv/bin/python apps/server/scrape_scripts/scrape_store.py
+.venv/bin/python apps/server/scrape_scripts/scrape_people.py
+.venv/bin/python apps/server/scrape_scripts/scrape_matches.py
+.venv/bin/python apps/server/scrape_scripts/scrape_videos_travel.py
+.venv/bin/python apps/server/scrape_scripts/scrape_membership.py
+.venv/bin/python apps/server/scrape_scripts/scrape_standings.py
 ```
 
-The scripts use `requests` and `beautifulsoup4`, which are already listed in the project's `pyproject.toml`. Fetched HTML is cached in `scrape_scripts/.cache/html/`, and extracted JSON is written to `scrape_scripts/.cache/extracted/`. Nothing overwrites the existing Markdown archive by default. Use `--refresh` to fetch pages again.
+The scripts require a Python environment with `requests` and `beautifulsoup4` installed. Fetched HTML is cached in `apps/server/scrape_scripts/.cache/html/`, and extracted JSON is written to `apps/server/scrape_scripts/.cache/extracted/`. Nothing overwrites the existing Markdown archive by default. These default paths are resolved relative to the scripts, so they stay inside `apps/server/` regardless of the working directory. Use `--refresh` to fetch pages again. The TypeScript ingestion command (`pnpm ingest`) writes Markdown captures to `apps/server/man_united_data_script/`.
 
 ## Files
 
@@ -44,9 +44,9 @@ The ticketing site may return HTTP 403 to command-line requests. In that case, s
 For a simple static page, convert its main content directly:
 
 ```bash
-.venv/bin/python scrape_scripts/html_to_markdown.py \
+.venv/bin/python apps/server/scrape_scripts/html_to_markdown.py \
   --url https://www.manutd.com/en/club/visit-old-trafford/getting-here \
-  --output /tmp/getting-here.md
+  --output apps/server/man_united_data_script/travel/getting-here.md
 ```
 
 The news and match pages embed story data in Next.js scripts rather than the visible server HTML. Use the topic scrapers for those pages; the generic HTML converter is intended for ordinary page content. When publishing captured prose, keep summaries and source links instead of reproducing full copyrighted articles.

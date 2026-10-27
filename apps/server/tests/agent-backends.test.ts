@@ -16,7 +16,7 @@ describe('agent backend routing', () => {
     }
   });
 
-  it('routes skills to the repository and retrieved files to persistent storage', async () => {
+  it('routes skills to the server directory and retrieved files to persistent storage', async () => {
     const { files, backend } = createAgentBackends(createTestStore(), 'visitor', 'chat');
     await files.write('/retrieved/story.md', 'A retrieved story.');
     expect(await backend.read('/retrieved/story.md')).toMatchObject({ content: expect.stringContaining('A retrieved story.') });

@@ -13,7 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CACHE = Path(__file__).resolve().parent / ".cache" / "html"
 DEFAULT_DATA = Path(__file__).resolve().parent / ".cache" / "extracted"
 CLUB_BASE = "https://www.manutd.com"

@@ -2,7 +2,7 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { CapturedPage } from '../types';
 
-export const MARKDOWN_DIRECTORY = path.resolve(__dirname, '../../../../../man_united_data_script');
+export const MARKDOWN_DIRECTORY = path.resolve(__dirname, '../../../man_united_data_script');
 
 /** Replace a capture atomically, preserving the previous file if writing fails. */
 export async function saveMarkdownFile(page: CapturedPage): Promise<string> {

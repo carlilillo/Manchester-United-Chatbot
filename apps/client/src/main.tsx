@@ -1,8 +1,18 @@
+import { App } from './App';
+import { TooltipProvider } from '@/components/ui/tooltip/TooltipProvider';
+import '@/index.css';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from './App';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import './index.css';
-document.documentElement.classList.add('dark');
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><TooltipProvider><App /></TooltipProvider></React.StrictMode>);
+// Mount only after the static HTML (including crawlable metadata) has loaded.
+const root = document.getElementById('root');
+
+if (!root) throw new Error('The application root element is missing.');
+
+createRoot(root).render(
+  <React.StrictMode>
+    <TooltipProvider>
+      <App />
+    </TooltipProvider>
+  </React.StrictMode>,
+);

@@ -7,6 +7,7 @@ const mock = vi.hoisted(() => ({
   messages: vi.fn(),
   createChat: vi.fn(),
   stream: vi.fn(),
+  edit: vi.fn(),
   allChats: vi.fn(),
   feedback: vi.fn(),
 }));
@@ -194,5 +195,55 @@ describe('conversation request lifecycle', () => {
     unmount();
     await sending;
     expect(signal.aborted).toBe(true);
+  });
+
+  it('replaces an edited question, drops later messages and streams with its id', async () => {
+    const saved: ChatMessage[] = [
+      {
+        id: 'q1',
+        role: 'human',
+        content: 'First',
+        createdAt: answer.createdAt,
+        status: 'complete',
+      },
+      { ...answer, id: 'a1' },
+      {
+        id: 'q2',
+        role: 'human',
+        content: 'Second',
+        createdAt: answer.createdAt,
+        status: 'complete',
+      },
+      { ...answer, id: 'a2' },
+    ];
+    mock.messages.mockResolvedValue({ messages: saved });
+    mock.edit.mockImplementation((_thread, _id, _text, _requestId, onEvent) => {
+      onEvent({ type: 'started', threadId: 'thread', messageId: 'a3' });
+      onEvent({ type: 'delta', messageId: 'a3', text: 'New answer' });
+      return Promise.resolve();
+    });
+    const { result } = renderHook(() => useConversation(vi.fn()));
+    await act(async () => {
+      await result.current.openChat('thread');
+    });
+    act(() => result.current.setPrompt('Unsent draft'));
+    await act(async () => {
+      await result.current.edit('q1', '  Edited first  ');
+    });
+    expect(mock.edit).toHaveBeenCalledWith(
+      'thread',
+      'q1',
+      'Edited first',
+      expect.any(String),
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+    expect(mock.stream).not.toHaveBeenCalled();
+    expect(result.current.messages.map(({ id, content }) => [id, content])).toEqual([
+      ['q1', 'Edited first'],
+      ['a3', 'New answer'],
+    ]);
+    expect(result.current.prompt).toBe('Unsent draft');
+    expect(result.current.isSending).toBe(false);
   });
 });

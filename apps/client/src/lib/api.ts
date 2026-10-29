@@ -38,6 +38,24 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json().catch(() => null)) as T;
 }
 
+/** Sends a question and reads the answer stream; framing and validation are delegated to the reader. */
+async function openStream(
+  path: string,
+  method: 'POST' | 'PUT',
+  text: string,
+  requestId: string,
+  onEvent: StreamEventHandler,
+  signal: AbortSignal,
+) {
+  const response = await request(path, {
+    method,
+    body: JSON.stringify({ text, requestId }),
+    signal,
+  });
+  if (!response.ok || !response.body) throw await errorFrom(response, 'Chat request failed');
+  await readEventStream(response.body, onEvent);
+}
+
 /** Typed endpoints shared by session, conversation, and preference hooks. */
 export const api = {
   session: () => json<SessionResponse>('/session', { method: 'POST' }),
@@ -61,20 +79,22 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ feedback }),
     }),
-  /** Opens an answer stream; framing and validation are delegated to the reader. */
-  async stream(
+  /** Appends a question and streams its answer. */
+  stream: (
     threadId: string,
     text: string,
     requestId: string,
     onEvent: StreamEventHandler,
     signal: AbortSignal,
-  ) {
-    const response = await request(`/chats/${threadId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ text, requestId }),
-      signal,
-    });
-    if (!response.ok || !response.body) throw await errorFrom(response, 'Chat request failed');
-    await readEventStream(response.body, onEvent);
-  },
+  ) => openStream(`/chats/${threadId}/messages`, 'POST', text, requestId, onEvent, signal),
+  /** Replaces a question, discarding the messages after it, and streams a new answer. */
+  edit: (
+    threadId: string,
+    messageId: string,
+    text: string,
+    requestId: string,
+    onEvent: StreamEventHandler,
+    signal: AbortSignal,
+  ) =>
+    openStream(`/chats/${threadId}/messages/${messageId}`, 'PUT', text, requestId, onEvent, signal),
 };

@@ -6,7 +6,12 @@ describe('agent failures', () => {
   it('logs technical details internally but sends only a generic SSE error', async () => {
     const log = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     const chats = {
-      begin: vi.fn().mockResolvedValue('message-1'),
+      begin: vi.fn().mockResolvedValue({
+        humanId: 'request-1',
+        messageId: 'message-1',
+        turn: 0,
+        edited: false,
+      }),
       finish: vi.fn().mockResolvedValue({}),
     };
     const agents = {

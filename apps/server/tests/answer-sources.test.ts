@@ -118,7 +118,12 @@ describe('completed runs', () => {
   it('saves the resolved sources on the finished answer', async () => {
     const resolved = [{ url: profile.source, title: 'Bruno Fernandes' }];
     const chats = {
-      begin: vi.fn().mockResolvedValue('message-1'),
+      begin: vi.fn().mockResolvedValue({
+        humanId: 'request',
+        messageId: 'message-1',
+        turn: 0,
+        edited: false,
+      }),
       finish: vi.fn().mockResolvedValue({ id: 'message-1', sources: resolved }),
     };
     const agents = {

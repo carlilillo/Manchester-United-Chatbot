@@ -3,17 +3,17 @@ import { Tooltip } from '@/components/ui/tooltip/Tooltip';
 import { TooltipContent } from '@/components/ui/tooltip/TooltipContent';
 import { TooltipTrigger } from '@/components/ui/tooltip/TooltipTrigger';
 import type { Feedback } from '@/features/chat/types';
-import { Copy, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Copy, Pencil, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ActionButtonProps, MessageActionsProps } from './types';
+import type { ActionButtonProps, MessageActionsProps, UserMessageActionsProps } from './types';
 
-/** Confirms copying only after clipboard access succeeds. */
-async function copyAnswer(content: string) {
+/** Confirms copying only after clipboard access succeeds; noun names what was copied. */
+async function copyText(content: string, noun: 'answer' | 'message') {
   try {
     await navigator.clipboard.writeText(content);
-    toast.success('Answer copied');
+    toast.success(noun === 'answer' ? 'Answer copied' : 'Message copied');
   } catch {
-    toast.error('Could not copy the answer. Select the text to copy it manually.');
+    toast.error(`Could not copy the ${noun}. Select the text to copy it manually.`);
   }
 }
 
@@ -49,7 +49,7 @@ function ActionButton({ label, pressed, onClick, children }: ActionButtonProps) 
 export function MessageActions({ message, onFeedback }: MessageActionsProps) {
   return (
     <div className="flex items-center">
-      <ActionButton label="Copy answer" onClick={() => void copyAnswer(message.content)}>
+      <ActionButton label="Copy answer" onClick={() => void copyText(message.content, 'answer')}>
         <Copy />
       </ActionButton>
       <ActionButton
@@ -66,6 +66,22 @@ export function MessageActions({ message, onFeedback }: MessageActionsProps) {
       >
         <ThumbsDown />
       </ActionButton>
+    </div>
+  );
+}
+
+/** Provides copy and edit controls for one of the visitor's questions. */
+export function UserMessageActions({ message, canEdit, onEdit }: UserMessageActionsProps) {
+  return (
+    <div className="flex items-center">
+      <ActionButton label="Copy message" onClick={() => void copyText(message.content, 'message')}>
+        <Copy />
+      </ActionButton>
+      {canEdit && (
+        <ActionButton label="Edit message" onClick={onEdit}>
+          <Pencil />
+        </ActionButton>
+      )}
     </div>
   );
 }

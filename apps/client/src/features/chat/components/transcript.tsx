@@ -11,7 +11,7 @@ import { UserMessage } from './user-message';
 import type { TranscriptProps } from './types';
 
 /** Delegates streaming follow and message anchoring to the shared scroller. */
-export function Transcript({ messages, onFeedback }: TranscriptProps) {
+export function Transcript({ messages, canEdit, onFeedback, onEdit }: TranscriptProps) {
   return (
     <MessageScrollerProvider autoScroll>
       {/* The viewport spans the full width so its scrollbar sits at the page edge. */}
@@ -25,7 +25,7 @@ export function Transcript({ messages, onFeedback }: TranscriptProps) {
                 scrollAnchor={message.role === 'human'}
               >
                 {message.role === 'human' ? (
-                  <UserMessage message={message} />
+                  <UserMessage message={message} canEdit={canEdit} onEdit={onEdit} />
                 ) : (
                   <AssistantMessage message={message} onFeedback={onFeedback} />
                 )}

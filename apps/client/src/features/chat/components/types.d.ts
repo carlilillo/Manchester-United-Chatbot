@@ -45,8 +45,30 @@ export type MessageSourcesProps = { sources: MessageSource[] };
 /** Props for MessageTime. */
 export type MessageTimeProps = { value: string };
 
+/** Saves an edited question and streams a new answer from it. */
+export type EditHandler = (messageId: string, text: string) => void;
+
+/** Props for UserMessageActions. */
+export type UserMessageActionsProps = {
+  message: ChatMessage;
+  /** Hidden while an answer streams, since an edit starts a new run. */
+  canEdit: boolean;
+  onEdit: () => void;
+};
+
+/** Props for UserMessageEditor. */
+export type UserMessageEditorProps = {
+  initialValue: string;
+  onCancel: () => void;
+  onSubmit: (text: string) => void;
+};
+
 /** Props for UserMessage. */
-export type UserMessageProps = { message: ChatMessage };
+export type UserMessageProps = {
+  message: ChatMessage;
+  canEdit: boolean;
+  onEdit: EditHandler;
+};
 
 /** Props for AssistantMessage. */
 export type AssistantMessageProps = {
@@ -57,5 +79,7 @@ export type AssistantMessageProps = {
 /** Props for Transcript. */
 export type TranscriptProps = {
   messages: ChatMessage[];
+  canEdit: boolean;
   onFeedback: FeedbackHandler;
+  onEdit: EditHandler;
 };

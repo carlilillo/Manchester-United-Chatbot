@@ -2,9 +2,10 @@ import {
   applyStreamEvent,
   createHumanMessage,
   finishStreamingMessages,
+  replaceHumanMessage,
 } from '@/features/chat/message-state';
 import { api } from '@/lib/api';
-import type { ChatMessage } from '@united/contracts';
+import type { ChatMessage, StreamEvent } from '@united/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { Feedback, HistoryChangeHandler } from '@/features/chat/types';
@@ -66,10 +67,20 @@ export function useConversation(onHistoryChange: HistoryChangeHandler) {
     }
   }
 
-  async function send(value = prompt) {
-    const text = value.trim();
+  function send(value = prompt) {
+    return submit(value.trim());
+  }
+
+  /** Replaces a saved question and streams a new answer from that point in the chat. */
+  function edit(messageId: string, value: string) {
+    return submit(value.trim(), messageId);
+  }
+
+  async function submit(text: string, editMessageId?: string) {
     // The ref guards rapid submissions before React has rendered disabled controls.
     if (!text || abortRef.current || loadingRef.current) return;
+    // Only questions already saved in a conversation can be edited.
+    if (editMessageId && !threadId) return;
     const abort = new AbortController();
     abortRef.current = abort;
     const version = ++requestVersion.current;
@@ -77,13 +88,16 @@ export function useConversation(onHistoryChange: HistoryChangeHandler) {
     const requestId = crypto.randomUUID();
     let activeThreadId = threadId;
 
+    const createdAt = new Date().toISOString();
     setIsSending(true);
-    setPrompt('');
+    // An edit leaves any draft in the composer untouched.
+    if (!editMessageId) setPrompt('');
     setError('');
-    setMessages((previous) => [
-      ...previous,
-      createHumanMessage(text, requestId, new Date().toISOString()),
-    ]);
+    setMessages((previous) =>
+      editMessageId
+        ? replaceHumanMessage(previous, editMessageId, text, requestId, createdAt)
+        : [...previous, createHumanMessage(text, requestId, createdAt)],
+    );
 
     try {
       activeThreadId ??= (await api.createChat()).threadId;
@@ -91,18 +105,15 @@ export function useConversation(onHistoryChange: HistoryChangeHandler) {
       setThreadId(activeThreadId);
       // Stop can be pressed while the new conversation is still being created.
       abort.signal.throwIfAborted();
-      await api.stream(
-        activeThreadId,
-        text,
-        requestId,
-        (event) => {
-          if (isCurrent() && !abort.signal.aborted) {
-            const createdAt = new Date().toISOString();
-            setMessages((previous) => applyStreamEvent(previous, event, createdAt));
-          }
-        },
-        abort.signal,
-      );
+      const onEvent = (event: StreamEvent) => {
+        if (isCurrent() && !abort.signal.aborted) {
+          const createdAt = new Date().toISOString();
+          setMessages((previous) => applyStreamEvent(previous, event, createdAt));
+        }
+      };
+      if (editMessageId)
+        await api.edit(activeThreadId, editMessageId, text, requestId, onEvent, abort.signal);
+      else await api.stream(activeThreadId, text, requestId, onEvent, abort.signal);
     } catch {
       if (!isCurrent()) return;
       const status = abort.signal.aborted ? 'cancelled' : 'failed';
@@ -159,6 +170,7 @@ export function useConversation(onHistoryChange: HistoryChangeHandler) {
     newChat,
     openChat,
     send,
+    edit,
     stop,
     feedback,
   };

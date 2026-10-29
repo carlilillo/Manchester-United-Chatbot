@@ -21,7 +21,13 @@ export function ChatWorkspace({ conversation }: ChatWorkspaceProps) {
       ) : isEmpty ? (
         <Welcome />
       ) : (
-        <Transcript messages={conversation.messages} onFeedback={conversation.feedback} />
+        <Transcript
+          messages={conversation.messages}
+          // Editing starts a new run, so it waits for the current answer to finish.
+          canEdit={!conversation.isSending && Boolean(conversation.threadId)}
+          onFeedback={conversation.feedback}
+          onEdit={(messageId, text) => void conversation.edit(messageId, text)}
+        />
       )}
       <div className={chatColumnClassName}>
         <ChatComposer

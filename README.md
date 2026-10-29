@@ -82,6 +82,7 @@ All endpoints are under `/api` and use the signed `united_session` HTTP-only coo
 | `GET /chats`, `POST /chats` | List or create chats |
 | `GET /chats/:threadId/messages` | Load one user's chat history |
 | `POST /chats/:threadId/messages` | Stream an agent answer as server-sent events |
+| `PUT /chats/:threadId/messages/:messageId` | Edit a question, discard the messages after it, and stream a new answer from the agent checkpoint before it |
 | `PATCH /chats/:threadId/messages/:messageId/feedback` | Like, dislike, or clear feedback |
 
 The activity panel displays tool calls and subagent progress. It does not expose private model reasoning; this distinction keeps the displayed trace accurate and reviewable.

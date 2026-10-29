@@ -8,10 +8,8 @@ import { InputGroupButton } from '@/components/ui/input-group/InputGroupButton';
 import { InputGroupTextarea } from '@/components/ui/input-group/InputGroupTextarea';
 import { ArrowUp, CircleAlert, Square, X } from 'lucide-react';
 import type { FormEvent, KeyboardEvent } from 'react';
+import { MAX_MESSAGE_LENGTH } from './message-limits';
 import type { ChatComposerProps } from './types';
-
-/** Matches the API's message limit so the visitor cannot type past it. */
-const MAX_MESSAGE_LENGTH = 8000;
 
 /** Collects a question and supports Enter, Shift+Enter, and stopping an answer. */
 export function ChatComposer({

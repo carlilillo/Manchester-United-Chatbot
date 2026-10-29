@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { HumanMessage } from '@langchain/core/messages';
 import type { RunStream } from '../utils/event-stream';
 import { consumeRunProjections } from '../utils/run-projections';
 import type { Activity } from '@united/contracts';
 import { AgentService } from '../agent/agent.service';
+import { findForkCheckpoint } from '../agent/fork-checkpoint';
 import { ChatService } from './chat.service';
 
 @Injectable()
@@ -14,26 +16,40 @@ export class RunService {
     private readonly chats: ChatService,
   ) {}
 
-  /** Stream independent agent projections concurrently so subagent activity appears live. */
+  /**
+   * Stream independent agent projections concurrently so subagent activity appears live.
+   * An edit forks the agent thread from the checkpoint before the edited question.
+   */
   async run(
     userId: string,
     threadId: string,
     text: string,
     requestId: string,
     stream: RunStream,
+    editMessageId?: string,
   ): Promise<void> {
-    const messageId = await this.chats.begin(userId, threadId, text, requestId);
+    const reservation = await this.chats.begin(userId, threadId, text, requestId, editMessageId);
+    const { messageId } = reservation;
     const emit = (event: Parameters<RunStream['emit']>[0]) => stream.emit(event);
     emit({ type: 'started', threadId, messageId });
     const abort = new AbortController();
     const signal = AbortSignal.any([stream.signal, abort.signal]);
     try {
       const { agent, context, sources } = await this.agents.create(userId, threadId);
+      const thread = { thread_id: `web:${userId}:${threadId}` };
+      const checkpointId = reservation.edited
+        ? await findForkCheckpoint(
+            agent.graph.getStateHistory({ configurable: thread }),
+            reservation.humanId,
+            reservation.turn,
+          )
+        : undefined;
       const run = await agent.streamEvents(
-        { messages: [{ role: 'user', content: text }] },
+        // The question's id lets a later edit find the checkpoint taken before it.
+        { messages: [new HumanMessage({ id: reservation.humanId, content: text })] },
         {
           version: 'v3',
-          configurable: { thread_id: `web:${userId}:${threadId}` },
+          configurable: checkpointId ? { ...thread, checkpoint_id: checkpointId } : thread,
           context,
           signal,
           recursionLimit: 100,

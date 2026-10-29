@@ -3,11 +3,35 @@ import { BubbleContent } from '@/components/ui/bubble/BubbleContent';
 import { Message } from '@/components/ui/message/Message';
 import { MessageContent } from '@/components/ui/message/MessageContent';
 import { MessageFooter } from '@/components/ui/message/MessageFooter';
+import { useState } from 'react';
+import { UserMessageActions } from './message-actions';
 import { MessageTime } from './message-time';
+import { UserMessageEditor } from './user-message-editor';
 import type { UserMessageProps } from './types';
 
-/** Shows the visitor's question as typed, in a bubble on the right. */
-export function UserMessage({ message }: UserMessageProps) {
+/**
+ * Shows the visitor's question as typed, in a bubble on the right, with its copy and
+ * edit actions always visible beneath it.
+ */
+export function UserMessage({ message, canEdit, onEdit }: UserMessageProps) {
+  const [isEditing, setIsEditing] = useState(false);
+
+  if (isEditing)
+    return (
+      <Message align="end">
+        <MessageContent className="sm:w-[85%]">
+          <UserMessageEditor
+            initialValue={message.content}
+            onCancel={() => setIsEditing(false)}
+            onSubmit={(text) => {
+              setIsEditing(false);
+              onEdit(message.id, text);
+            }}
+          />
+        </MessageContent>
+      </Message>
+    );
+
   return (
     <Message align="end">
       <MessageContent className="gap-1.5">
@@ -17,8 +41,13 @@ export function UserMessage({ message }: UserMessageProps) {
             {message.content}
           </BubbleContent>
         </Bubble>
-        <MessageFooter className="px-1">
+        <MessageFooter className="-mr-1.5 gap-2 pl-1">
           <MessageTime value={message.createdAt} />
+          <UserMessageActions
+            message={message}
+            canEdit={canEdit}
+            onEdit={() => setIsEditing(true)}
+          />
         </MessageFooter>
       </MessageContent>
     </Message>

@@ -13,6 +13,22 @@ export function createHumanMessage(
   return { id: requestId, role: 'human', content: text, createdAt, status: 'complete', requestId };
 }
 
+/**
+ * Shows an edited question in place of the original and drops everything after it,
+ * mirroring the server, which keeps the question's id and discards later messages.
+ */
+export function replaceHumanMessage(
+  messages: ChatMessage[],
+  messageId: string,
+  text: string,
+  requestId: string,
+  createdAt: string,
+): ChatMessage[] {
+  const index = messages.findIndex((message) => message.id === messageId);
+  if (index < 0) return messages;
+  return [...messages.slice(0, index), { ...messages[index], content: text, createdAt, requestId }];
+}
+
 /** Applies a validated server event without mutating the current transcript. */
 export function applyStreamEvent(
   messages: ChatMessage[],

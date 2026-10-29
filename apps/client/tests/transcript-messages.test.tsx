@@ -17,6 +17,14 @@ const answer: ChatMessage = {
   feedback: null,
 };
 
+const question: ChatMessage = {
+  id: 'q',
+  role: 'human',
+  content: 'Who scored in 1968?',
+  createdAt,
+  status: 'complete',
+};
+
 describe('transcript messages', () => {
   it('renders an answer without an avatar and names its author for screen readers', () => {
     const { container } = render(<AssistantMessage message={answer} onFeedback={vi.fn()} />);
@@ -105,10 +113,43 @@ describe('transcript messages', () => {
           createdAt,
           status: 'complete',
         }}
+        canEdit
+        onEdit={vi.fn()}
       />,
     );
     expect(screen.getByText('1. *Not* a list')).toBeTruthy();
     expect(screen.getByText('You said:').className).toContain('sr-only');
+  });
+
+  it('edits a question in place and submits only changed text', () => {
+    const onEdit = vi.fn();
+    render(<UserMessage message={question} canEdit onEdit={onEdit} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit message' }));
+    const editor = screen.getByRole('textbox', { name: 'Edit message' }) as HTMLTextAreaElement;
+    expect(editor.value).toBe(question.content);
+    expect(document.activeElement).toBe(editor);
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(editor, { target: { value: '  Who scored in 1999?  ' } });
+    fireEvent.keyDown(editor, { key: 'Enter' });
+    expect(onEdit).toHaveBeenCalledWith('q', 'Who scored in 1999?');
+    expect(screen.queryByRole('textbox', { name: 'Edit message' })).toBeNull();
+  });
+
+  it('restores the question when editing is cancelled with Escape', () => {
+    const onEdit = vi.fn();
+    render(<UserMessage message={question} canEdit onEdit={onEdit} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit message' }));
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit message' }), { key: 'Escape' });
+    expect(screen.getByText(question.content)).toBeTruthy();
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it('keeps copying available but hides editing while an answer streams', () => {
+    render(<UserMessage message={question} canEdit={false} onEdit={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Copy message' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit message' })).toBeNull();
   });
 });
 

@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Res,
 } from '@nestjs/common';
@@ -73,15 +74,41 @@ export class ChatController {
   @Header('Content-Type', 'text/event-stream; charset=utf-8')
   @Header('Cache-Control', 'no-cache, no-transform')
   @Header('Connection', 'keep-alive')
-  async send(
+  send(
     @SessionUser() userId: string,
     @Res() response: Response,
     @Param('threadId', ParseUUIDPipe) threadId: string,
     @Body(new SchemaValidationPipe(messageInputSchema)) input: z.infer<typeof messageInputSchema>,
   ) {
+    return this.stream(response, userId, threadId, input);
+  }
+
+  /** Replaces a question, discards the messages after it, and streams a new answer. */
+  @Put(':threadId/messages/:messageId')
+  @HttpCode(200)
+  @Header('Content-Type', 'text/event-stream; charset=utf-8')
+  @Header('Cache-Control', 'no-cache, no-transform')
+  @Header('Connection', 'keep-alive')
+  edit(
+    @SessionUser() userId: string,
+    @Res() response: Response,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Body(new SchemaValidationPipe(messageInputSchema)) input: z.infer<typeof messageInputSchema>,
+  ) {
+    return this.stream(response, userId, threadId, input, messageId);
+  }
+
+  private async stream(
+    response: Response,
+    userId: string,
+    threadId: string,
+    input: z.infer<typeof messageInputSchema>,
+    editMessageId?: string,
+  ) {
     const stream = createEventStream(response);
     try {
-      await this.runs.run(userId, threadId, input.text, input.requestId, stream);
+      await this.runs.run(userId, threadId, input.text, input.requestId, stream, editMessageId);
       stream.close();
     } catch (error) {
       // Once streaming has started, close the response even if final persistence fails.

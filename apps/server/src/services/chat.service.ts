@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'node:crypto';
 import type { Activity, ChatMessage, ChatSummary } from '@united/contracts';
+import type { MessageSource } from '../agent/sources/source-collector';
 import { ChatEntity } from '../entities/chat.entity';
 
 @Injectable()
@@ -102,15 +103,18 @@ export class ChatService {
     });
   }
 
+  /** Close a run; a completed answer also records the sources its agents used. */
   async finish(
     userId: string,
     threadId: string,
     messageId: string,
     status: 'complete' | 'failed' | 'cancelled',
+    sources?: MessageSource[],
   ) {
     const row = await this.mutate(userId, threadId, (row) => {
       const target = row.messages.find((m) => m.id === messageId);
       if (target) target.status = status;
+      if (target && sources?.length) target.sources = sources;
       row.status = 'idle';
     });
     return row.messages.find((m) => m.id === messageId)!;

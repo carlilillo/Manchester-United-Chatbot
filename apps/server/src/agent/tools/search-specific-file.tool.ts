@@ -1,20 +1,29 @@
 import { tool } from 'langchain';
 import { z } from 'zod';
 import type { SourceDocumentService } from '../../ingestion/source-document.service';
+import { markdownTitle } from '../sources/markdown-title';
+import type { SourceCollector } from '../sources/source-collector';
 
 const archivePath = z.string().trim().regex(
   /^(?:[a-zA-Z0-9_-]+\/)+[a-zA-Z0-9_-]+\.md$/,
   'Use a relative archive Markdown path, such as matches/standings-men-premier-league.md.',
 );
 
-/** Read complete database documents for known paths without semantic ranking or chunk truncation. */
-export function createSearchSpecificFileTool(documents: Pick<SourceDocumentService, 'getByPaths'>) {
+/**
+ * Read complete database documents for known paths without semantic ranking or chunk truncation.
+ * Every returned document is recorded as a source of the run's answer.
+ */
+export function createSearchSpecificFileTool(
+  documents: Pick<SourceDocumentService, 'getByPaths'>,
+  sources?: Pick<SourceCollector, 'markUsed'>,
+) {
   return tool(async ({ file_paths }) => {
     const paths = [...new Set(file_paths)];
     const records = await documents.getByPaths(paths);
     return paths.map(path => {
       const matches = records.filter(record => record.path === path);
       if (!matches.length) return `Archive path: ${path}\nNo archived document exists at this path. Use semantic search to discover another source.`;
+      for (const record of matches) sources?.markUsed({ url: record.source, path: record.path, title: markdownTitle(record.markdown) });
       // Preserve every source when more than one record shares an archive path.
       return matches.map(record => [
         `Archive path: ${record.path}`,

@@ -5,6 +5,7 @@ import type { StoreBackend } from 'deepagents';
 import { tool, type ToolRuntime } from 'langchain';
 import { z } from 'zod';
 import type { AgentContext } from '../agent.context';
+import type { SourceCollector } from '../sources/source-collector';
 
 const RESULT_LIMIT = 8;
 const searchSchema = z.object({
@@ -15,6 +16,7 @@ const searchSchema = z.object({
 type SearchInput = z.infer<typeof searchSchema>;
 type KnowledgeSearch = Pick<PGVectorStore, 'similaritySearchWithScore'>;
 type RetrievedFiles = Pick<StoreBackend, 'write'>;
+type ExcerptSources = Pick<SourceCollector, 'registerExcerpt'>;
 
 /** Keep source provenance beside each chunk, including chunks without the original document header. */
 function retrievedMarkdown(document: Document): string {
@@ -29,8 +31,11 @@ function retrievedMarkdown(document: Document): string {
   ].join('\n');
 }
 
-/** Search the published index and expose readable excerpts to both agents in their shared backend. */
-export function createSearchTool(knowledge: KnowledgeSearch, files: RetrievedFiles) {
+/**
+ * Search the published index and expose readable excerpts to both agents in their shared backend.
+ * Each excerpt file is registered with the run's sources so reading it lists its official page.
+ */
+export function createSearchTool(knowledge: KnowledgeSearch, files: RetrievedFiles, sources?: ExcerptSources) {
   return tool(async ({ query, source }: SearchInput, runtime: ToolRuntime<unknown, AgentContext>) => {
     const store = runtime.context?.knowledgeVectorStore ?? knowledge;
     const filter: Record<string, string | boolean> = { active: true };
@@ -45,6 +50,8 @@ export function createSearchTool(knowledge: KnowledgeSearch, files: RetrievedFil
       const virtualPath = `/retrieved/${retrievalId}/${index + 1}.md`;
       const result = await files.write(virtualPath, retrievedMarkdown(document));
       if (result.error) throw new Error(`Could not save retrieved excerpt ${virtualPath}: ${result.error}`);
+      const { source, path } = document.metadata;
+      if (typeof source === 'string' && typeof path === 'string') sources?.registerExcerpt(virtualPath, { url: source, path });
       references.push([
         `- File: ${virtualPath}`,
         `  Source: ${document.metadata.source ?? 'Not supplied'}`,

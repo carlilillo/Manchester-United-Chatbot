@@ -48,6 +48,17 @@ Pagination offsets must be integers. Missing offsets default to zero and negativ
 offsets are clamped to zero. Malformed signed session identifiers are rejected before
 they reach a UUID database column.
 
+## Answer sources
+
+Answers do not print citation links; the client lists sources beneath each answer.
+Each run creates a `SourceCollector` (`src/agent/sources`). A search excerpt counts
+as a source once either agent reads it with `read_file`, observed through the
+conversation's `StoreBackend`. A complete document counts when `searchSpecificFile`
+returns it. Search hits that are never read are not listed. Pages are deduplicated
+by URL and titled from their archived `# heading` in one query when the run
+completes. `ChatService.finish` stores them on the answer's `sources` field, which
+the `completed` event carries to the client.
+
 ## Checks
 
 Run from the repository root:

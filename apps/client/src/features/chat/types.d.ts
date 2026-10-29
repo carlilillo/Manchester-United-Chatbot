@@ -18,11 +18,3 @@ export type TraceStatus = TraceLineProps['status'];
 
 /** A page an answer drew on, as listed beneath it. */
 export type MessageSource = NonNullable<ChatMessage['sources']>[number];
-
-/** The parts of an mdast node read when collecting links from an answer. */
-export interface MarkdownNode {
-  type: string;
-  url?: string;
-  value?: string;
-  children?: MarkdownNode[];
-}

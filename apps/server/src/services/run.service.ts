@@ -28,7 +28,7 @@ export class RunService {
     const abort = new AbortController();
     const signal = AbortSignal.any([stream.signal, abort.signal]);
     try {
-      const { agent, context } = await this.agents.create(userId, threadId);
+      const { agent, context, sources } = await this.agents.create(userId, threadId);
       const run = await agent.streamEvents(
         { messages: [{ role: 'user', content: text }] },
         {
@@ -55,7 +55,9 @@ export class RunService {
         () => abort.abort(),
       );
       await run.output;
-      const final = await this.chats.finish(userId, threadId, messageId, 'complete');
+      // Sources come from the documents the agents read, so the answer need not print links.
+      const used = await sources.resolve();
+      const final = await this.chats.finish(userId, threadId, messageId, 'complete', used);
       emit({ type: 'completed', message: final });
     } catch (error) {
       const status = stream.signal.aborted ? 'cancelled' : 'failed';

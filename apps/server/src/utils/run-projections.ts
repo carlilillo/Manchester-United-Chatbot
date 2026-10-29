@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Activity } from '@united/contracts';
+import { describeToolCall } from './describe-tool-call';
 
 /** The projections consumed by the web application, independent of the agent implementation. */
 interface AgentProjections {
@@ -20,11 +21,12 @@ async function trackTools(
 ): Promise<void> {
   for await (const call of calls) {
     const input = await call.input;
+    const { title, detail } = describeToolCall(call.name, input);
     const activity = {
       id: randomUUID(),
       kind: 'tool' as const,
-      title: call.name,
-      detail: (typeof input === 'string' ? input : JSON.stringify(input))?.slice(0, 500),
+      title,
+      detail: detail?.slice(0, 500),
       timestamp: new Date().toISOString(),
     };
     await track({ ...activity, status: 'running' });

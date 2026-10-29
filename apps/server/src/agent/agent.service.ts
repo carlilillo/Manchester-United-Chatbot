@@ -10,6 +10,7 @@ import { createChatModel } from './model/chat-model';
 import { ORCHESTRATOR_PROMPT } from './prompts/orchestrator.prompt';
 import { RESEARCH_PROMPT } from './prompts/research.prompt';
 import { buildRuntimePrompt } from './prompts/runtime-prompt';
+import { SourceCollector } from './sources/source-collector';
 import { createSearchTool } from './tools/search.tool';
 import { createSearchSpecificFileTool } from './tools/search-specific-file.tool';
 
@@ -24,12 +25,16 @@ export class AgentService {
     private readonly documents: SourceDocumentService,
   ) {}
 
-  /** Initialize persistence and give both agents access to the same isolated retrieved files. */
+  /**
+   * Initialize persistence and give both agents access to the same isolated retrieved files.
+   * The returned collector gathers the run's sources from tool use, not from the answer text.
+   */
   async create(userId: string, threadId: string) {
     await this.persistence.setup();
-    const { files, backend } = createAgentBackends(this.persistence.store, userId, threadId);
-    const searchTool = createSearchTool(this.vectors.knowledge, files);
-    const searchSpecificFile = createSearchSpecificFileTool(this.documents);
+    const sources = new SourceCollector(this.documents);
+    const { files, backend } = createAgentBackends(this.persistence.store, userId, threadId, sources.markRead);
+    const searchTool = createSearchTool(this.vectors.knowledge, files, sources);
+    const searchSpecificFile = createSearchSpecificFileTool(this.documents, sources);
     const memory = await this.vectors.runtimeMemory(userId);
     const now = new Date();
     const context: AgentContext = {
@@ -46,7 +51,7 @@ export class AgentService {
       tools: [searchTool],
       subagents: [{
         name: 'Research Subagent',
-        description: 'Research Manchester United questions with searchSpecificFile tool for complete known archive documents. Read full standings, schedules, news pages, rosters and membership comparisons when needed. Return relevant facts, official source links, dates and evidence gaps.',
+        description: 'Research Manchester United questions with searchSpecificFile tool for complete known archive documents. Read full standings, schedules, news pages, rosters and membership comparisons when needed. Return relevant facts, dates and evidence gaps.',
         model: this.model,
         systemPrompt: buildRuntimePrompt(RESEARCH_PROMPT, memory, now),
         tools: [searchSpecificFile],
@@ -59,6 +64,6 @@ export class AgentService {
       store: this.persistence.store,
       contextSchema: agentContextSchema,
     });
-    return { agent, context };
+    return { agent, context, sources };
   }
 }

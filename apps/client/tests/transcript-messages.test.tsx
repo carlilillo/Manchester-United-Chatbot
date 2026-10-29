@@ -50,13 +50,16 @@ describe('transcript messages', () => {
     expect(screen.queryByRole('button', { name: 'Copy answer' })).toBeNull();
   });
 
-  it('lists cited pages as sources that open in a new tab', () => {
+  it('lists recorded sources that open in a new tab, and ignores links in the text', () => {
     render(
       <AssistantMessage
         message={{
           ...answer,
-          content:
-            'See [Fixtures](https://www.manutd.com/fixtures) and [Fixtures again](https://www.manutd.com/fixtures).',
+          content: 'See the [squad](https://www.manutd.com/squad).',
+          sources: [
+            { url: 'https://www.manutd.com/fixtures', title: 'Fixtures' },
+            { url: 'https://www.manutd.com/fixtures', title: 'Fixtures again' },
+          ],
         }}
         onFeedback={vi.fn()}
       />,
@@ -68,10 +71,24 @@ describe('transcript messages', () => {
     expect(source.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
+  it('shows no sources for an answer without recorded sources', () => {
+    render(
+      <AssistantMessage
+        message={{ ...answer, content: 'See [the club](https://www.manutd.com).' }}
+        onFeedback={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /used \d+ source/i })).toBeNull();
+  });
+
   it('holds sources back until an answer finishes streaming', () => {
     render(
       <AssistantMessage
-        message={{ ...answer, content: '[Club](https://www.manutd.com)', status: 'streaming' }}
+        message={{
+          ...answer,
+          status: 'streaming',
+          sources: [{ url: 'https://www.manutd.com', title: 'Club' }],
+        }}
         onFeedback={vi.fn()}
       />,
     );

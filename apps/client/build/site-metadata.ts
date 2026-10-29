@@ -24,7 +24,7 @@ export function parseSiteUrl(value: string | undefined): URL | null {
 /** Writes absolute sharing URLs into HTML so crawlers do not need to run React. */
 export function siteMetadata(siteUrl: URL | null) {
   return {
-    name: 'united-archive-site-metadata',
+    name: 'united-chat-site-metadata',
     buildStart() {
       if (!siteUrl) {
         this.warn(

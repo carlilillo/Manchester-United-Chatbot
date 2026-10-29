@@ -9,7 +9,7 @@ describe('static search and sharing metadata', () => {
   it('produces canonical and absolute image URLs without executing React', () => {
     const result = siteMetadata(parseSiteUrl('https://united.example')).transformIndexHtml(html);
     const document = new DOMParser().parseFromString(result.html, 'text/html');
-    expect(document.title).toBe('United Archive | Manchester United Fan Chat');
+    expect(document.title).toBe('The United Chat | Manchester United Fan Chat');
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain(
       'independent fan chatbot',
     );

@@ -6,7 +6,9 @@ export const toggleVariants = cva(
     variants: {
       variant: {
         default: 'bg-transparent',
-        outline: 'border border-input bg-transparent hover:bg-muted',
+        // Unpressed options recede so the pressed one reads as the current choice.
+        outline:
+          'border border-input bg-transparent text-muted-foreground hover:bg-muted aria-pressed:border-foreground/30 aria-pressed:bg-secondary aria-pressed:text-foreground',
       },
       size: {
         default:

@@ -18,6 +18,9 @@ export type ButtonProps = ButtonPrimitive.Props & VariantProps<typeof buttonVari
 /** Props for Input. */
 export type InputProps = React.ComponentProps<'input'>;
 
+/** Props for Label. */
+export type LabelProps = React.ComponentProps<'label'>;
+
 /** Props for Separator. */
 export type SeparatorProps = SeparatorPrimitive.Props;
 

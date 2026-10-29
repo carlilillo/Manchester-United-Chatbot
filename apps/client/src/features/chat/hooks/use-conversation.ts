@@ -1,10 +1,13 @@
-import { applyStreamEvent, finishStreamingMessages } from '@/features/chat/message-state';
-import type { Feedback } from '@/features/chat/types';
+import {
+  applyStreamEvent,
+  createHumanMessage,
+  finishStreamingMessages,
+} from '@/features/chat/message-state';
 import { api } from '@/lib/api';
 import type { ChatMessage } from '@united/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import type { HistoryChangeHandler } from '../types';
+import type { Feedback, HistoryChangeHandler } from '@/features/chat/types';
 
 /** Owns one conversation and prevents stale requests from replacing its state. */
 export function useConversation(onHistoryChange: HistoryChangeHandler) {
@@ -79,14 +82,7 @@ export function useConversation(onHistoryChange: HistoryChangeHandler) {
     setError('');
     setMessages((previous) => [
       ...previous,
-      {
-        id: requestId,
-        role: 'human',
-        content: text,
-        createdAt: new Date().toISOString(),
-        status: 'complete',
-        requestId,
-      },
+      createHumanMessage(text, requestId, new Date().toISOString()),
     ]);
 
     try {

@@ -4,23 +4,31 @@ import { MessageScrollerContent } from '@/components/ui/message-scroller/Message
 import { MessageScrollerItem } from '@/components/ui/message-scroller/MessageScrollerItem';
 import { MessageScrollerProvider } from '@/components/ui/message-scroller/MessageScrollerProvider';
 import { MessageScrollerViewport } from '@/components/ui/message-scroller/MessageScrollerViewport';
-import { TranscriptMessage } from './transcript-message';
+import { cn } from 'cn';
+import { AssistantMessage } from './assistant-message';
+import { chatColumnClassName } from './chat-column';
+import { UserMessage } from './user-message';
 import type { TranscriptProps } from './types';
 
 /** Delegates streaming follow and message anchoring to the shared scroller. */
 export function Transcript({ messages, onFeedback }: TranscriptProps) {
   return (
     <MessageScrollerProvider autoScroll>
-      <MessageScroller className="transcript" aria-label="Conversation">
+      {/* The viewport spans the full width so its scrollbar sits at the page edge. */}
+      <MessageScroller className="min-h-0 flex-1" aria-label="Conversation">
         <MessageScrollerViewport>
-          <MessageScrollerContent className="transcript-content">
+          <MessageScrollerContent className={cn(chatColumnClassName, 'gap-8 pt-8 pb-10')}>
             {messages.map((message) => (
               <MessageScrollerItem
                 key={message.id}
                 messageId={message.id}
                 scrollAnchor={message.role === 'human'}
               >
-                <TranscriptMessage message={message} onFeedback={onFeedback} />
+                {message.role === 'human' ? (
+                  <UserMessage message={message} />
+                ) : (
+                  <AssistantMessage message={message} onFeedback={onFeedback} />
+                )}
               </MessageScrollerItem>
             ))}
           </MessageScrollerContent>

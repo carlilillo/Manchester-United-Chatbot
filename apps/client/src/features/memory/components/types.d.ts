@@ -16,4 +16,5 @@ export type MemoryPageProps = {
 export interface ResponseStyleFieldProps {
   value: Memory['responseStyle'];
   onChange: (value: Memory['responseStyle']) => void;
+  className?: string;
 }

@@ -1,24 +1,34 @@
-# United Archive client
+# The United Chat client
 
-React and Vite power an independent Manchester United research chat. The existing
-Manrope/Barlow typography, red accents, dark surfaces, and responsive layout live
-in `src/index.css`.
+React and Vite power an independent Manchester United fan chat. The visual theme
+lives in `src/index.css`: shadcn's default neutral dark palette carries the
+interface, and `--brand` (United red, `#DA291C`) is reserved for a few details —
+the send action, the active conversation, enabled switches, and link underlines.
+Barlow Condensed sets headlines and the wordmark; Manrope sets everything else.
+
+Style components with Tailwind utilities and semantic tokens (`bg-card`,
+`text-muted-foreground`, `bg-brand`) rather than raw colors. Restyle a shadcn
+primitive by editing its `cva` variants. The only hand-written CSS is answer
+typography (`.message-markdown`), because react-markdown generates those elements.
 
 ## Code organization
 
 - `App.tsx` composes the shell and selects the active screen.
-- `components/layout/` contains navigation, the header, and loading presentation.
+- `components/layout/` contains navigation, the header, and loading and error states.
 - `components/ui/` contains reusable shadcn primitives. Each component documents
   its purpose; application-specific behavior belongs in a feature. Component
   families have a directory with one directly exported component per file.
-- `features/chat/components/` renders the welcome screen, transcript, activity,
-  message actions, and composer.
+- `features/chat/components/` renders the welcome screen, transcript, user and
+  assistant messages, activity, message actions, and composer. They share one
+  reading column (`chat-column.ts`) so their edges align.
+- `features/chat/activity.ts` and `format.ts` hold pure presentation helpers.
 - `features/chat/hooks/use-conversation.ts` owns conversation requests, cancellation,
   and stale-request protection. `message-state.ts` applies stream events immutably.
-- `features/memory/` owns the preferences form and its unsaved draft.
+- `features/memory/` owns the preferences form and its unsaved draft;
+  `preferences.ts` holds defaults, limits, and tone options derived from the contract.
 - `hooks/use-session.ts` establishes the visitor cookie before loading saved data.
 - `lib/api.ts` defines endpoints; `lib/event-stream.ts` handles SSE framing and
-  contract validation.
+  contract validation. `lib/site.ts` holds the product name and crest path.
 
 Keep comments about responsibility, invariants, or non-obvious behavior. Small UI
 event handlers may stay beside their controls; network lifecycles and reusable

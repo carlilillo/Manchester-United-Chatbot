@@ -1,6 +1,18 @@
 import type { ChatMessage, StreamEvent } from '@united/contracts';
 import type { InterruptedMessageStatus } from './types';
 
+/**
+ * Builds the optimistic question shown before the server confirms it. The
+ * request id doubles as the message id so the persisted copy can replace it.
+ */
+export function createHumanMessage(
+  text: string,
+  requestId: string,
+  createdAt: string,
+): ChatMessage {
+  return { id: requestId, role: 'human', content: text, createdAt, status: 'complete', requestId };
+}
+
 /** Applies a validated server event without mutating the current transcript. */
 export function applyStreamEvent(
   messages: ChatMessage[],

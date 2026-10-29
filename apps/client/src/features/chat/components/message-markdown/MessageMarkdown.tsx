@@ -5,8 +5,10 @@ import type { MessageMarkdownProps } from './types';
 /** Renders answer Markdown with GFM support and the default safe URL handling. */
 export function MessageMarkdown({ content }: MessageMarkdownProps) {
   return (
-    <ReactMarkdown remarkPlugins={markdownPlugins} components={markdownComponents}>
-      {content}
-    </ReactMarkdown>
+    <div className="message-markdown">
+      <ReactMarkdown remarkPlugins={markdownPlugins} components={markdownComponents}>
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 }

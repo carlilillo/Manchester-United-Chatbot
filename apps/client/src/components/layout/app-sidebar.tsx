@@ -1,6 +1,5 @@
 import { Sidebar } from '@/components/ui/sidebar/Sidebar';
 import { SidebarContent } from '@/components/ui/sidebar/SidebarContent';
-import { SidebarFooter } from '@/components/ui/sidebar/SidebarFooter';
 import { SidebarGroup } from '@/components/ui/sidebar/SidebarGroup';
 import { SidebarGroupContent } from '@/components/ui/sidebar/SidebarGroupContent';
 import { SidebarGroupLabel } from '@/components/ui/sidebar/SidebarGroupLabel';
@@ -9,9 +8,16 @@ import { SidebarMenu } from '@/components/ui/sidebar/SidebarMenu';
 import { SidebarMenuButton } from '@/components/ui/sidebar/SidebarMenuButton';
 import { SidebarMenuItem } from '@/components/ui/sidebar/SidebarMenuItem';
 import { useSidebar } from '@/hooks/use-sidebar';
-import { History, MessageCircle, Plus, Settings2 } from 'lucide-react';
-import type { NavigationAction } from './types';
-import type { AppSidebarProps } from './types';
+import { APP_NAME, CREST_SRC } from '@/lib/site';
+import { Brain, Plus } from 'lucide-react';
+import type { AppSidebarProps, NavigationAction } from './types';
+
+/**
+ * The active conversation is marked with a red edge, the sidebar's only use of
+ * the brand color, so the current place stays obvious without loud fills.
+ */
+const ACTIVE_ITEM =
+  'relative data-active:before:absolute data-active:before:inset-y-1.5 data-active:before:left-0 data-active:before:w-0.5 data-active:before:rounded-full data-active:before:bg-sidebar-primary';
 
 /** Provides workspace navigation and closes the mobile drawer after selection. */
 export function AppSidebar({
@@ -32,75 +38,68 @@ export function AppSidebar({
   }
 
   return (
-    <Sidebar collapsible="offcanvas" className="app-sidebar">
-      <SidebarHeader className="sidebar-brand">
-        <div className="brand-mark">
-          U<span>·</span>
-        </div>
-        <div>
-          <strong>UNITED ARCHIVE</strong>
-          <small>THE CLUB, IN CONTEXT</small>
-        </div>
+    <Sidebar collapsible="offcanvas">
+      <SidebarHeader className="flex-row items-center gap-3 px-4 pt-5 pb-4">
+        <img src={CREST_SRC} alt="" width={36} height={36} className="size-9 shrink-0" />
+        <span className="font-heading text-xl leading-none font-semibold">{APP_NAME}</span>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="px-2">
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-1.5">
               <SidebarMenuItem>
                 <SidebarMenuButton
+                  variant="outline"
+                  size="lg"
+                  className="h-10 justify-start font-medium"
                   onClick={() => navigate(onNewChat)}
                   disabled={disabled}
-                  className="new-chat-button"
                 >
                   <Plus />
-                  <span>New Chat</span>
+                  <span>New chat</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
+                  className={ACTIVE_ITEM}
                   onClick={() => navigate(onOpenMemory)}
                   disabled={disabled}
                   isActive={isMemoryOpen}
                 >
-                  <Settings2 />
+                  <Brain />
                   <span>Memory</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup className="history-group">
-          <SidebarGroupLabel>
-            <History size={13} /> CONVERSATIONS
-          </SidebarGroupLabel>
+        <SidebarGroup>
+          <SidebarGroupLabel>Chats</SidebarGroupLabel>
           <SidebarGroupContent>
             {chats.length ? (
               <SidebarMenu>
                 {chats.map((chat) => (
                   <SidebarMenuItem key={chat.threadId}>
                     <SidebarMenuButton
+                      className={ACTIVE_ITEM}
                       onClick={() => navigate(() => onOpenChat(chat.threadId))}
                       disabled={disabled || isSending}
                       isActive={!isMemoryOpen && activeThreadId === chat.threadId}
                       title={chat.title}
                     >
-                      <MessageCircle />
                       <span>{chat.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
             ) : (
-              <p className="empty-history">Your conversations will appear here.</p>
+              <p className="px-2 py-1 text-xs text-muted-foreground">
+                Your chats will appear here.
+              </p>
             )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
-        <div className="sidebar-foot">
-          <span className="live-indicator" /> THE UNITED KNOWLEDGE DESK
-        </div>
-      </SidebarFooter>
     </Sidebar>
   );
 }

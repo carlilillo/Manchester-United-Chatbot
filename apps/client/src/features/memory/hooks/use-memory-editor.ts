@@ -1,3 +1,4 @@
+import { DEFAULT_PREFERENCES, toMemoryInput } from '@/features/memory/preferences';
 import { api } from '@/lib/api';
 import type { Memory } from '@united/contracts';
 import { useRef, useState } from 'react';
@@ -8,14 +9,16 @@ import type { MemoryDraftChanges, MemorySavedHandler } from '../types';
 export function useMemoryEditor(memory: Memory, onSaved: MemorySavedHandler) {
   const [draft, setDraft] = useState(memory);
   const [isSaving, setIsSaving] = useState(false);
+  // The ref blocks a second save before React re-renders the disabled form.
   const savingRef = useRef(false);
 
   function update(changes: MemoryDraftChanges) {
     setDraft((previous) => ({ ...previous, ...changes }));
   }
 
+  /** Restores defaults in the draft only; nothing is saved until the visitor confirms. */
   function reset() {
-    setDraft({ ...memory, enabled: true, responseStyle: 'friendly', notes: '' });
+    setDraft((previous) => ({ ...previous, ...DEFAULT_PREFERENCES }));
   }
 
   async function save() {
@@ -23,17 +26,13 @@ export function useMemoryEditor(memory: Memory, onSaved: MemorySavedHandler) {
     savingRef.current = true;
     setIsSaving(true);
     try {
-      const saved = await api.saveMemory({
-        enabled: draft.enabled,
-        responseStyle: draft.responseStyle,
-        notes: draft.notes,
-        version: memory.version,
-      });
+      const saved = await api.saveMemory(toMemoryInput(draft, memory.version));
       onSaved(saved);
       setDraft(saved);
       toast.success('Memory saved');
     } catch {
-      toast.error('Could not save your preferences. Please try again.');
+      // The draft is kept so the visitor can retry without retyping.
+      toast.error('Could not save memory. Please try again.');
     } finally {
       savingRef.current = false;
       setIsSaving(false);

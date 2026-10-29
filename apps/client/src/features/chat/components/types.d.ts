@@ -1,6 +1,7 @@
 import type { useConversation } from '@/features/chat/hooks/use-conversation';
-import type { FeedbackHandler } from '@/features/chat/types';
+import type { FeedbackHandler, MessageSource } from '@/features/chat/types';
 import type { Activity, ChatMessage } from '@united/contracts';
+import type { ReactNode } from 'react';
 
 /** Props for ActivityTrace. */
 export type ActivityTraceProps = { activity: Activity[] };
@@ -16,9 +17,20 @@ export interface ChatComposerProps {
   onDismissError: () => void;
 }
 
+/** Props for ChatDisclaimer. */
+export type ChatDisclaimerProps = { className?: string };
+
 /** Props for ChatWorkspace. */
 export type ChatWorkspaceProps = {
   conversation: ReturnType<typeof useConversation>;
+};
+
+/** Props for the icon buttons inside MessageActions. */
+export type ActionButtonProps = {
+  label: string;
+  pressed?: boolean;
+  onClick: () => void;
+  children: ReactNode;
 };
 
 /** Props for MessageActions. */
@@ -27,8 +39,17 @@ export type MessageActionsProps = {
   onFeedback: FeedbackHandler;
 };
 
-/** Props for TranscriptMessage. */
-export type TranscriptMessageProps = {
+/** Props for MessageSources. */
+export type MessageSourcesProps = { sources: MessageSource[] };
+
+/** Props for MessageTime. */
+export type MessageTimeProps = { value: string };
+
+/** Props for UserMessage. */
+export type UserMessageProps = { message: ChatMessage };
+
+/** Props for AssistantMessage. */
+export type AssistantMessageProps = {
   message: ChatMessage;
   onFeedback: FeedbackHandler;
 };
@@ -37,10 +58,4 @@ export type TranscriptMessageProps = {
 export type TranscriptProps = {
   messages: ChatMessage[];
   onFeedback: FeedbackHandler;
-};
-
-/** Props for Welcome. */
-export type WelcomeProps = {
-  onSuggestion: (prompt: string) => void;
-  disabled: boolean;
 };

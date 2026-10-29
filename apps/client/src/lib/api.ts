@@ -13,16 +13,29 @@ import type {
   StreamEventHandler,
 } from './types';
 
-/** Sends cookie-authenticated JSON requests to the same-origin API. */
-async function json<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${path}`, {
+/** The history endpoint returns at most this many chats per page. */
+export const CHAT_PAGE_SIZE = 30;
+
+/** Sends a cookie-authenticated JSON request to the same-origin API. */
+function request(path: string, init?: RequestInit) {
+  return fetch(`/api${path}`, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     ...init,
   });
+}
+
+/** Prefers the API's own message so failures stay explainable to the visitor. */
+async function errorFrom(response: Response, fallback: string) {
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.message ?? `Request failed (${response.status})`);
-  return data as T;
+  return new Error(data?.message ?? `${fallback} (${response.status})`);
+}
+
+/** Parses a JSON response body (an empty body yields null) and rejects non-2xx statuses. */
+async function json<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await request(path, init);
+  if (!response.ok) throw await errorFrom(response, 'Request failed');
+  return (await response.json().catch(() => null)) as T;
 }
 
 /** Typed endpoints shared by session, conversation, and preference hooks. */
@@ -38,7 +51,7 @@ export const api = {
     for (;;) {
       const page = await api.chats(result.length);
       result.push(...page);
-      if (page.length < 30) return result;
+      if (page.length < CHAT_PAGE_SIZE) return result;
     }
   },
   createChat: () => json<CreateChatResponse>('/chats', { method: 'POST' }),
@@ -56,17 +69,12 @@ export const api = {
     onEvent: StreamEventHandler,
     signal: AbortSignal,
   ) {
-    const response = await fetch(`/api/chats/${threadId}/messages`, {
+    const response = await request(`/chats/${threadId}/messages`, {
       method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, requestId }),
       signal,
     });
-    if (!response.ok || !response.body) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message ?? `Chat request failed (${response.status})`);
-    }
+    if (!response.ok || !response.body) throw await errorFrom(response, 'Chat request failed');
     await readEventStream(response.body, onEvent);
   },
 };

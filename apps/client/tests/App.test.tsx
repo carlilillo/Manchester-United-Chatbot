@@ -15,6 +15,9 @@ const mock = vi.hoisted(() => ({
 }));
 vi.mock('../src/lib/api', () => ({ api: mock }));
 
+const WELCOME = 'What do you want to know today?';
+const NOTES_LABEL = 'How should I answer?';
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubGlobal(
@@ -58,7 +61,7 @@ afterEach(() => {
 describe('chat workspace', () => {
   it('initializes the cookie before loading memory and history, then opens a new chat', async () => {
     render(<App />);
-    await screen.findByText('Every era.');
+    await screen.findByText(WELCOME);
     expect(mock.session).toHaveBeenCalledTimes(1);
     expect(mock.memory).toHaveBeenCalledTimes(1);
     expect(mock.allChats).toHaveBeenCalledTimes(1);
@@ -67,10 +70,46 @@ describe('chat workspace', () => {
     );
     expect(screen.getByText('Old Trafford history')).toBeTruthy();
     fireEvent.click(screen.getByText('Memory'));
-    expect(await screen.findByText('Make it yours.')).toBeTruthy();
-    fireEvent.click(screen.getByText('New Chat'));
-    expect(await screen.findByText('Every era.')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Memory' })).toBeTruthy();
+    fireEvent.click(screen.getByText('New chat'));
+    expect(await screen.findByText(WELCOME)).toBeTruthy();
     await waitFor(() => expect(mock.messages).not.toHaveBeenCalled());
+  });
+
+  it('shows the brand and a welcome screen with nothing but the question', async () => {
+    render(<App />);
+    const welcome = await screen.findByRole('heading', { level: 1, name: WELCOME });
+    const section = welcome.closest('section')!;
+    expect(section.textContent).toBe(WELCOME);
+    expect(screen.getByText('The United Chat')).toBeTruthy();
+    expect(document.querySelector('img[src="/manchester-united-crest.png"]')).toBeTruthy();
+    expect(screen.queryByText(/united archive|knowledge desk|est\. 1878/i)).toBeNull();
+  });
+
+  it('titles the header with the open conversation only', async () => {
+    mock.messages.mockResolvedValue({
+      threadId: 'thread-1',
+      title: 'Old Trafford history',
+      status: 'idle',
+      messages: [
+        {
+          id: 'h',
+          role: 'human',
+          content: 'When did Old Trafford open?',
+          createdAt: '2026-10-27T12:00:00Z',
+          status: 'complete',
+        },
+      ],
+    });
+    render(<App />);
+    await screen.findByText(WELCOME);
+    fireEvent.click(screen.getByText('Old Trafford history'));
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Old Trafford history' }),
+    ).toBeTruthy();
+    expect(await screen.findByText('When did Old Trafford open?')).toBeTruthy();
+    fireEvent.click(screen.getByText('Memory'));
+    expect(screen.queryByRole('heading', { name: 'Old Trafford history' })).toBeNull();
   });
 
   it('never renders a provider error from the chat stream', async () => {
@@ -84,7 +123,7 @@ describe('chat workspace', () => {
       });
     });
     render(<App />);
-    await screen.findByText('Every era.');
+    await screen.findByText(WELCOME);
     fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
       target: { value: 'Tell me about United' },
     });
@@ -102,7 +141,7 @@ describe('workspace recovery and preferences', () => {
     expect(mock.memory).not.toHaveBeenCalled();
     expect(mock.allChats).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await screen.findByText('Every era.');
+    await screen.findByText(WELCOME);
     expect(mock.session).toHaveBeenCalledTimes(2);
     expect(mock.memory).toHaveBeenCalledTimes(1);
   });
@@ -114,11 +153,11 @@ describe('workspace recovery and preferences', () => {
       updatedAt: '2026-10-27T12:00:00Z',
     }));
     render(<App />);
-    await screen.findByText('Every era.');
+    await screen.findByText(WELCOME);
     fireEvent.click(screen.getByText('Memory'));
-    const notes = screen.getByLabelText('HOW SHOULD I ANSWER?');
+    const notes = screen.getByLabelText(NOTES_LABEL);
     fireEvent.change(notes, { target: { value: 'Keep answers concise.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save preferences' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save memory' }));
     await waitFor(() =>
       expect(mock.saveMemory).toHaveBeenCalledWith({
         enabled: true,
@@ -129,37 +168,37 @@ describe('workspace recovery and preferences', () => {
     );
     await screen.findByText('Memory saved');
     fireEvent.change(notes, { target: { value: 'Unsaved change' } });
-    fireEvent.click(screen.getByText('New Chat'));
+    fireEvent.click(screen.getByText('New chat'));
     fireEvent.click(screen.getByText('Memory'));
-    expect((screen.getByLabelText('HOW SHOULD I ANSWER?') as HTMLTextAreaElement).value).toBe(
+    expect((screen.getByLabelText(NOTES_LABEL) as HTMLTextAreaElement).value).toBe(
       'Keep answers concise.',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
-    expect((screen.getByLabelText('HOW SHOULD I ANSWER?') as HTMLTextAreaElement).value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Restore defaults' }));
+    expect((screen.getByLabelText(NOTES_LABEL) as HTMLTextAreaElement).value).toBe('');
     expect(mock.saveMemory).toHaveBeenCalledTimes(1);
   });
 
   it('preserves a failed preference draft for retry', async () => {
     mock.saveMemory.mockRejectedValue(new Error('Temporary failure'));
     render(<App />);
-    await screen.findByText('Every era.');
+    await screen.findByText(WELCOME);
     fireEvent.click(screen.getByText('Memory'));
-    fireEvent.change(screen.getByLabelText('HOW SHOULD I ANSWER?'), {
+    fireEvent.change(screen.getByLabelText(NOTES_LABEL), {
       target: { value: 'Keep this draft.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save preferences' }));
-    await screen.findByText('Could not save your preferences. Please try again.');
-    expect((screen.getByLabelText('HOW SHOULD I ANSWER?') as HTMLTextAreaElement).value).toBe(
+    fireEvent.click(screen.getByRole('button', { name: 'Save memory' }));
+    await screen.findByText('Could not save memory. Please try again.');
+    expect((screen.getByLabelText(NOTES_LABEL) as HTMLTextAreaElement).value).toBe(
       'Keep this draft.',
     );
     expect(
-      (screen.getByRole('button', { name: 'Save preferences' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Save memory' }) as HTMLButtonElement).disabled,
     ).toBe(false);
   });
 
   it('does not send Enter presses during composition or with Shift', async () => {
     render(<App />);
-    await screen.findByText('Every era.');
+    await screen.findByText(WELCOME);
     const input = screen.getByRole('textbox', { name: 'Message' });
     fireEvent.change(input, { target: { value: 'A question in progress' } });
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true });

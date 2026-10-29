@@ -1,7 +1,10 @@
 import { load } from 'cheerio';
 
 export type JsonObject = Record<string, unknown>;
-export const clean = (value: unknown) => String(value ?? '').replace(/\s+/g, ' ').trim();
+export const clean = (value: unknown) =>
+  String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 /** Read one JSON array argument from a Next.js push call, respecting quoted brackets. */
 function jsonArrayAt(script: string, start: number): { value: unknown; end: number } | undefined {
@@ -17,8 +20,11 @@ function jsonArrayAt(script: string, start: number): { value: unknown; end: numb
     } else if (character === '"') quoted = true;
     else if (character === '[') depth++;
     else if (character === ']' && --depth === 0) {
-      try { return { value: JSON.parse(script.slice(start, index + 1)), end: index + 1 }; }
-      catch { return undefined; }
+      try {
+        return { value: JSON.parse(script.slice(start, index + 1)), end: index + 1 };
+      } catch {
+        return undefined;
+      }
     }
   }
   return undefined;
@@ -37,7 +43,11 @@ export function nextRecords(html: string): unknown[] {
       const argument = jsonArrayAt(script, start + 'self.__next_f.push('.length);
       if (!argument) break;
       cursor = argument.end;
-      if (Array.isArray(argument.value) && argument.value[0] === 1 && typeof argument.value[1] === 'string') {
+      if (
+        Array.isArray(argument.value) &&
+        argument.value[0] === 1 &&
+        typeof argument.value[1] === 'string'
+      ) {
         payload += argument.value[1];
       }
     }
@@ -46,8 +56,11 @@ export function nextRecords(html: string): unknown[] {
   for (const line of payload.split('\n')) {
     const separator = line.indexOf(':');
     if (separator < 0) continue;
-    try { output.push(JSON.parse(line.slice(separator + 1))); }
-    catch { /* Next.js also emits non-JSON protocol lines. */ }
+    try {
+      output.push(JSON.parse(line.slice(separator + 1)));
+    } catch {
+      /* Next.js also emits non-JSON protocol lines. */
+    }
   }
   return output;
 }
@@ -64,4 +77,3 @@ export function* walk(value: unknown): Generator<JsonObject> {
     for (const child of Object.values(value)) yield* walk(child);
   }
 }
-

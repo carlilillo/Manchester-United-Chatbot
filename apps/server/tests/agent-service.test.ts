@@ -5,18 +5,30 @@ import { createTestStore } from './helpers/agent-store';
 import { buildRuntimePrompt } from '../src/agent/prompts/runtime-prompt';
 import type { Memory } from '@united/contracts';
 
-vi.mock('../src/config/env', () => ({ env: () => ({ OPENAI_CHAT_MODEL: 'gpt-6.1-sol', OPENAI_API_KEY: 'test-key' }) }));
-vi.mock('deepagents', async importOriginal => ({
-  ...await importOriginal<typeof import('deepagents')>(),
+vi.mock('../src/config/env', () => ({
+  env: () => ({ OPENAI_CHAT_MODEL: 'gpt-6.1-sol', OPENAI_API_KEY: 'test-key' }),
+}));
+vi.mock('deepagents', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('deepagents')>()),
   createDeepAgent: vi.fn().mockReturnValue({ name: 'assembled-agent' }),
 }));
 
-const preferences: Memory = { enabled: true, responseStyle: 'friendly', notes: 'Use brief answers.', version: 1, updatedAt: null };
+const preferences: Memory = {
+  enabled: true,
+  responseStyle: 'friendly',
+  notes: 'Use brief answers.',
+  version: 1,
+  updatedAt: null,
+};
 
 /** Provide ready-state dependencies without opening database or model connections. */
 function setup(memory = preferences) {
   const vectors = { knowledge: {}, memory: {}, runtimeMemory: vi.fn().mockResolvedValue(memory) };
-  const persistence = { setup: vi.fn().mockResolvedValue(undefined), store: createTestStore(), checkpointer: {} };
+  const persistence = {
+    setup: vi.fn().mockResolvedValue(undefined),
+    store: createTestStore(),
+    checkpointer: {},
+  };
   const documents = { getByPaths: vi.fn().mockResolvedValue([]) };
   const service = new AgentService(vectors as never, persistence as never, documents as never);
   return { service, vectors, persistence };
@@ -30,18 +42,29 @@ describe('agent harness assembly', () => {
     const { context } = await service.create('visitor', 'chat');
     expect(persistence.setup).toHaveBeenCalledOnce();
     expect(vectors.runtimeMemory).toHaveBeenCalledWith('visitor');
-    expect(context).toEqual({ userId: 'visitor', threadId: 'chat', knowledgeVectorStore: vectors.knowledge, memoryVectorStore: vectors.memory });
+    expect(context).toEqual({
+      userId: 'visitor',
+      threadId: 'chat',
+      knowledgeVectorStore: vectors.knowledge,
+      memoryVectorStore: vectors.memory,
+    });
     const options = vi.mocked(createDeepAgent).mock.calls[0][0]!;
     expect(options.store).toBe(persistence.store);
     expect(options.checkpointer).toBe(persistence.checkpointer);
-    expect(options.tools?.map(tool => tool.name)).toEqual(['search_manchester_united_documentation']);
+    expect(options.tools?.map((tool) => tool.name)).toEqual([
+      'search_manchester_united_documentation',
+    ]);
     const researcher = options.subagents![0];
     expect(researcher).toMatchObject({ skills: ['/skills/'] });
-    expect(researcher).toHaveProperty('tools.0', options.tools![0]);
-    expect(researcher).toHaveProperty('tools.1.name', 'searchSpecificFile');
-    expect(options.permissions).toEqual([{ operations: ['write'], paths: ['/skills/**'], mode: 'deny' }]);
+    expect(researcher).toHaveProperty('tools.0.name', 'searchSpecificFile');
+    expect(researcher).toHaveProperty('tools.length', 1);
+    expect(options.permissions).toEqual([
+      { operations: ['write'], paths: ['/skills/**'], mode: 'deny' },
+    ]);
     expect(options.systemPrompt).toContain('Use brief answers.');
-    expect(researcher).toMatchObject({ systemPrompt: expect.stringContaining('Use brief answers.') });
+    expect(researcher).toMatchObject({
+      systemPrompt: expect.stringContaining('Use brief answers.'),
+    });
     expect(options.model).toHaveProperty('useResponsesApi', true);
   });
 

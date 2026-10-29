@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { IngestionRunEntity } from '../entities/ingestion-run.entity';
 import { batches } from '../utils/batches';
 import { withDocumentWorkflowLock } from '../utils/document-workflow-lock';
@@ -16,6 +17,7 @@ export class IngestionService {
   constructor(
     private readonly database: DataSource,
     private readonly documents: SourceDocumentService,
+    @InjectRepository(IngestionRunEntity) private readonly runs: Repository<IngestionRunEntity>,
   ) {}
 
   /** Run an exclusive capture, keeping it separate from vectorization. */
@@ -25,10 +27,16 @@ export class IngestionService {
 
   /** Record fetch/storage failures while retaining successful captures for later indexing. */
   private async captureDocuments() {
-    const repository = this.database.getRepository(IngestionRunEntity);
-    const record = await repository.save(repository.create({
-      status: 'running', updated: 0, failed: 0, errors: [], finishedAt: null,
-    }));
+    const repository = this.runs;
+    const record = await repository.save(
+      repository.create({
+        status: 'running',
+        updated: 0,
+        failed: 0,
+        errors: [],
+        finishedAt: null,
+      }),
+    );
     const errors: string[] = [];
     const reportError = (message: string) => {
       errors.push(message);
@@ -38,7 +46,7 @@ export class IngestionService {
     try {
       this.logger.log(`Starting ingestion; Markdown directory: ${MARKDOWN_DIRECTORY}`);
       const removed = await this.documents.removeObsolete();
-      await removeObsoleteFiles(message => this.logger.log(message));
+      await removeObsoleteFiles((message) => this.logger.log(message));
       this.logger.log(`Removed ${removed} obsolete database documents`);
       const pages = await scrapeAll(reportError);
       for (const batch of batches(pages, SOURCE_BATCH_SIZE)) {
@@ -57,11 +65,14 @@ export class IngestionService {
           record.updated += saved.length;
           this.logger.log(`Stored ${saved.length} source documents in the database`);
         } catch (error) {
-          for (const page of saved) reportError(`${page.path}: database save failed: ${String(error)}`);
+          for (const page of saved)
+            reportError(`${page.path}: database save failed: ${String(error)}`);
         }
       }
       record.status = errors.length ? 'partial' : 'completed';
-      this.logger.log(`Ingestion ${record.status}: ${record.updated} stored, ${errors.length} failures`);
+      this.logger.log(
+        `Ingestion ${record.status}: ${record.updated} stored, ${errors.length} failures`,
+      );
       return { status: record.status, updated: record.updated, failed: errors.length, errors };
     } catch (error) {
       record.status = 'failed';

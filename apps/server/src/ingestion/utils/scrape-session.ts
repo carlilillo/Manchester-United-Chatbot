@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
-import { createConcurrencyLimiter } from '../concurrency';
-import { fetchJson, fetchPage } from '../fetch-page';
-import { htmlToMarkdown } from '../html-to-markdown';
+import { createConcurrencyLimiter } from './concurrency';
+import { fetchJson, fetchPage } from './fetch-page';
+import { htmlToMarkdown } from './html-to-markdown';
 import type { CapturedPage, MarkdownExtractor } from '../types';
 import { batches } from '../../utils/batches';
 import { uniqueNameFor } from './source-links';
@@ -19,7 +19,9 @@ export class ScrapeSession {
   async html(source: string, destination: string): Promise<string> {
     this.logger.log(`Fetching: ${source} -> ${destination}`);
     const html = await this.request(() => fetchPage(source));
-    this.logger.log(`Fetched HTML: ${source} -> ${destination} (${Buffer.byteLength(html, 'utf8')} bytes)`);
+    this.logger.log(
+      `Fetched HTML: ${source} -> ${destination} (${Buffer.byteLength(html, 'utf8')} bytes)`,
+    );
     return html;
   }
 
@@ -40,7 +42,12 @@ export class ScrapeSession {
   }
 
   /** Save ordinary page content, isolating failures so other topics can proceed. */
-  async capture(source: string, path: string, type: string, extract: MarkdownExtractor = htmlToMarkdown): Promise<string> {
+  async capture(
+    source: string,
+    path: string,
+    type: string,
+    extract: MarkdownExtractor = htmlToMarkdown,
+  ): Promise<string> {
     let html = '';
     try {
       html = await this.html(source, path);
@@ -53,15 +60,22 @@ export class ScrapeSession {
   }
 
   /** Capture distinct detail pages in bounded batches, with separate namespaces per topic. */
-  async details(urls: string[], prefix: string, type: string, extract?: MarkdownExtractor): Promise<void> {
-    const unique = urls.filter(url => {
+  async details(
+    urls: string[],
+    prefix: string,
+    type: string,
+    extract?: MarkdownExtractor,
+  ): Promise<void> {
+    const unique = urls.filter((url) => {
       const key = `${prefix}:${url}`;
       if (this.seen.has(key)) return false;
       this.seen.add(key);
       return true;
     });
     for (const batch of batches(unique, 2)) {
-      await Promise.all(batch.map(url => this.capture(url, `${prefix}/${uniqueNameFor(url)}.md`, type, extract)));
+      await Promise.all(
+        batch.map((url) => this.capture(url, `${prefix}/${uniqueNameFor(url)}.md`, type, extract)),
+      );
     }
   }
 }

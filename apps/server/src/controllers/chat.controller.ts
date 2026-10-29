@@ -1,29 +1,94 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import {
+  Body,
+  Controller,
+  DefaultValuePipe,
+  Get,
+  Header,
+  HttpCode,
+  Param,
+  ParseIntPipe,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { feedbackSchema, messageInputSchema } from '@united/contracts';
-import { SessionService } from '../services/session.service';
+import type { z } from 'zod';
+import { SessionUser } from '../decorators/session-user.decorator';
+import { SchemaValidationPipe } from '../pipes/schema-validation.pipe';
 import { ChatService } from '../services/chat.service';
 import { RunService } from '../services/run.service';
+import { createEventStream } from '../utils/event-stream';
+
 @Controller('chats')
 export class ChatController {
-  constructor(private readonly sessions: SessionService, private readonly chats: ChatService, private readonly runs: RunService) {}
-  @Get() list(@Req() req: Request, @Query('offset') rawOffset?: string) { return this.chats.list(this.sessions.requireUser(req), 30, Math.max(0, Number(rawOffset) || 0)); }
-  @Post() create(@Req() req: Request) { return this.chats.create(this.sessions.requireUser(req)); }
-  @Get(':threadId/messages') async messages(@Req() req: Request, @Param('threadId', ParseUUIDPipe) threadId: string) {
-    const chat = await this.chats.get(this.sessions.requireUser(req), threadId);
-    return { threadId: chat.threadId, title: chat.title, messages: chat.messages, status: chat.status };
+  constructor(
+    private readonly chats: ChatService,
+    private readonly runs: RunService,
+  ) {}
+
+  @Get()
+  list(
+    @SessionUser() userId: string,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+  ) {
+    return this.chats.list(userId, 30, Math.max(0, offset));
   }
-  @Patch(':threadId/messages/:messageId/feedback') feedback(@Req() req: Request, @Param('threadId', ParseUUIDPipe) threadId: string, @Param('messageId', ParseUUIDPipe) messageId: string, @Body() body: unknown) {
-    const parsed = feedbackSchema.safeParse((body as { feedback?: unknown })?.feedback);
-    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
-    const value = parsed.data;
-    return this.chats.feedback(this.sessions.requireUser(req), threadId, messageId, value);
+
+  @Post()
+  create(@SessionUser() userId: string) {
+    return this.chats.create(userId);
   }
-  @Post(':threadId/messages') async send(@Req() req: Request, @Res() res: Response, @Param('threadId', ParseUUIDPipe) threadId: string, @Body() body: unknown) {
-    const parsed = messageInputSchema.safeParse(body);
-    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
-    const input = parsed.data;
-    const userId = this.sessions.requireUser(req);
-    await this.runs.run(userId, threadId, input.text, input.requestId, res);
+
+  @Get(':threadId/messages')
+  async messages(
+    @SessionUser() userId: string,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+  ) {
+    const chat = await this.chats.get(userId, threadId);
+    return {
+      threadId: chat.threadId,
+      title: chat.title,
+      messages: chat.messages,
+      status: chat.status,
+    };
+  }
+
+  @Patch(':threadId/messages/:messageId/feedback')
+  feedback(
+    @SessionUser() userId: string,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Body('feedback', new SchemaValidationPipe(feedbackSchema))
+    feedback: z.infer<typeof feedbackSchema>,
+  ) {
+    return this.chats.feedback(userId, threadId, messageId, feedback);
+  }
+
+  /** POST streaming keeps the existing request body contract while declaring SSE headers with Nest. */
+  @Post(':threadId/messages')
+  @HttpCode(200)
+  @Header('Content-Type', 'text/event-stream; charset=utf-8')
+  @Header('Cache-Control', 'no-cache, no-transform')
+  @Header('Connection', 'keep-alive')
+  async send(
+    @SessionUser() userId: string,
+    @Res() response: Response,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Body(new SchemaValidationPipe(messageInputSchema)) input: z.infer<typeof messageInputSchema>,
+  ) {
+    const stream = createEventStream(response);
+    try {
+      await this.runs.run(userId, threadId, input.text, input.requestId, stream);
+      stream.close();
+    } catch (error) {
+      // Once streaming has started, close the response even if final persistence fails.
+      if (response.headersSent) stream.close();
+      throw error;
+    } finally {
+      stream.dispose();
+    }
   }
 }

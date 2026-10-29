@@ -13,7 +13,7 @@ export function newsItems(html: string, source: string): NewsItem[] {
   cards.each((_index, element) => {
     const card = $(element);
     const anchors = card.find('a[href]').toArray();
-    const article = anchors.find(anchor => {
+    const article = anchors.find((anchor) => {
       const href = absoluteUrl($(anchor).attr('href'), source);
       return href && isNewsArticle(new URL(href));
     });
@@ -23,7 +23,7 @@ export function newsItems(html: string, source: string): NewsItem[] {
     if (!title) return;
     const image = absoluteUrl(card.find('img').first().attr('src'), source);
     const existing = items.get(href);
-    if (!existing || !existing.image && image) items.set(href, { title, source: href, image });
+    if (!existing || (!existing.image && image)) items.set(href, { title, source: href, image });
   });
   return [...items.values()];
 }
@@ -31,11 +31,18 @@ export function newsItems(html: string, source: string): NewsItem[] {
 /** Render only the title, source, and image URL for each news item. */
 export function newsListingMarkdown(items: NewsItem[], pageNumber: number): string {
   if (!items.length) throw new Error('No news article cards found');
-  return `# News — page ${pageNumber}\n\n` + items.map(item => [
-    `- ${markdownText(item.title)}`,
-    `  - Source: [Article](${markdownUrl(item.source)})`,
-    ...(item.image ? [`  - Image: [Image](${markdownUrl(item.image)})`] : []),
-  ].join('\n')).join('\n\n');
+  return (
+    `# News — page ${pageNumber}\n\n` +
+    items
+      .map((item) =>
+        [
+          `- ${markdownText(item.title)}`,
+          `  - Source: [Article](${markdownUrl(item.source)})`,
+          ...(item.image ? [`  - Image: [Image](${markdownUrl(item.image)})`] : []),
+        ].join('\n'),
+      )
+      .join('\n\n')
+  );
 }
 
 /** Store compact listings and discover articles only from the cards on each page. */
@@ -48,8 +55,10 @@ export async function scrapeNews(session: ScrapeSession, pageCount: number): Pro
       const html = await session.html(source, path);
       const items = newsItems(html, source);
       session.add(source, path, 'news', newsListingMarkdown(items, page));
-      items.forEach(item => articleUrls.add(item.source));
-    } catch (error) { session.reportError(`${source}: ${String(error)}`); }
+      items.forEach((item) => articleUrls.add(item.source));
+    } catch (error) {
+      session.reportError(`${source}: ${String(error)}`);
+    }
   }
   await session.details([...articleUrls], 'news/articles', 'news');
 }

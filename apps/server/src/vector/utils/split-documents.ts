@@ -5,8 +5,11 @@ import type { SourceDocumentEntity } from '../../entities/source-document.entity
 const splitter = new RecursiveCharacterTextSplitter({ chunkSize: 1500, chunkOverlap: 300 });
 
 /** Split stored text as-is; retain source metadata without prepending headings or titles. */
-export async function splitSourceDocuments(sources: SourceDocumentEntity[], revision: string): Promise<Document[]> {
-  const documents = sources.map(source => {
+export async function splitSourceDocuments(
+  sources: SourceDocumentEntity[],
+  revision: string,
+): Promise<Document[]> {
+  const documents = sources.map((source) => {
     if (!source.markdown.trim()) throw new Error(`Empty source document: ${source.path}`);
     return new Document({
       pageContent: source.markdown,

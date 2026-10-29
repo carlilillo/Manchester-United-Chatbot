@@ -12,7 +12,10 @@
     "db:revert": "node -r ts-node/register src/cli.ts revert",
     "db:setup": "node -r ts-node/register src/cli.ts setup",
     "ingest": "node -r ts-node/register src/cli.ts ingest",
-    "vectorize": "node -r ts-node/register src/cli.ts vectorize"
+    "vectorize": "node -r ts-node/register src/cli.ts vectorize",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.{ts,cjs}\" \"*.json\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.{ts,cjs}\" \"*.json\"",
+    "test:smoke": "node -r ts-node/register tests/helpers/server-smoke.cjs"
   },
   "dependencies": {
     "@langchain/core": "^1.0.0",
@@ -42,6 +45,7 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.0",
+    "prettier": "3.6.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"

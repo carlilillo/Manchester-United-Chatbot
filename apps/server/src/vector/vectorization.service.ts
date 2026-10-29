@@ -55,15 +55,17 @@ export class VectorizationService {
     } catch (error) {
       this.logger.error(`Vectorization failed: ${String(error)}`);
       if (stagingStarted) {
-        await this.vectors.discardKnowledgeRevision(revision).catch(cleanupError => {
-          this.logger.warn(`Could not remove unpublished revision ${revision}: ${String(cleanupError)}`);
+        await this.vectors.discardKnowledgeRevision(revision).catch((cleanupError) => {
+          this.logger.warn(
+            `Could not remove unpublished revision ${revision}: ${String(cleanupError)}`,
+          );
         });
       }
       throw error;
     }
 
     // Cleanup failure must not undo or misreport a successfully published revision.
-    await this.vectors.deleteInactiveKnowledge().catch(error => {
+    await this.vectors.deleteInactiveKnowledge().catch((error) => {
       this.logger.warn(`Index published; old vector cleanup failed: ${String(error)}`);
     });
     this.logger.log(`Vectorization completed: ${documentCount} documents, ${chunkCount} chunks`);

@@ -1,7 +1,6 @@
 import 'reflect-metadata';
-import { Pool } from 'pg';
 import { NestFactory } from '@nestjs/core';
-import { createDataSource } from './config/database';
+import { createWorkflowDataSource } from './utils/workflow-database';
 import { env } from './config/env';
 import { AppModule } from './app.module';
 import { PersistenceService } from './services/persistence.service';
@@ -16,26 +15,37 @@ async function main() {
   if (!['migrate', 'revert', 'setup', 'ingest', 'vectorize'].includes(command)) {
     throw new Error(`Unknown command: ${command}`);
   }
-  const schema = env().DATABASE_SCHEMA;
-  const pool = new Pool({ connectionString: env().DATABASE_URL });
-  try {
-    await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
-    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
-  } finally { await pool.end(); }
-  const db = createDataSource();
+  const db = createWorkflowDataSource();
   await db.initialize();
   try {
-    if (command !== 'revert') await db.runMigrations();
+    // The driver initializes extensions; schema creation uses TypeORM's API.
+    if (command !== 'revert') {
+      const runner = db.createQueryRunner();
+      try {
+        await runner.createSchema(env().DATABASE_SCHEMA, true);
+      } finally {
+        await runner.release();
+      }
+      await db.runMigrations();
+    }
     if (command === 'revert') await db.undoLastMigration();
-  } finally { await db.destroy(); }
+  } finally {
+    await db.destroy();
+  }
   if (command === 'setup' || command === 'ingest' || command === 'vectorize') {
-    const module = command === 'ingest' ? IngestionModule : command === 'vectorize' ? VectorModule : AppModule;
+    const module =
+      command === 'ingest' ? IngestionModule : command === 'vectorize' ? VectorModule : AppModule;
     const app = await NestFactory.createApplicationContext(module);
     try {
       if (command === 'setup') await app.get(PersistenceService).setup();
       if (command === 'ingest') console.log(await app.get(IngestionService).run());
       if (command === 'vectorize') console.log(await app.get(VectorizationService).run());
-    } finally { await app.close(); }
+    } finally {
+      await app.close();
+    }
   }
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -7,8 +7,12 @@ import { VectorService } from '../vector/vector.service';
 @Injectable()
 export class PersistenceService implements OnModuleDestroy {
   private readonly logger = new Logger(PersistenceService.name);
-  readonly store = PostgresStore.fromConnString(env().DATABASE_ASYNC_URL, { schema: env().DATABASE_SCHEMA });
-  readonly checkpointer = PostgresSaver.fromConnString(env().DATABASE_ASYNC_URL, { schema: env().DATABASE_SCHEMA });
+  readonly store = PostgresStore.fromConnString(env().DATABASE_ASYNC_URL, {
+    schema: env().DATABASE_SCHEMA,
+  });
+  readonly checkpointer = PostgresSaver.fromConnString(env().DATABASE_ASYNC_URL, {
+    schema: env().DATABASE_SCHEMA,
+  });
   private ready?: Promise<void>;
   constructor(private readonly vectors: VectorService) {}
   /** Initialize persistent stores once; callers await the same readiness promise. */
@@ -24,6 +28,7 @@ export class PersistenceService implements OnModuleDestroy {
     })();
     await this.ready;
   }
+
   /** Close the persistence clients after the application stops serving runs. */
   async onModuleDestroy() {
     this.logger.log('Closing LangGraph store');

@@ -12,19 +12,22 @@ type DomNode = {
 
 const clean = (value: string) => value.replace(/\s+/g, ' ').trim();
 const escapeText = (value: string) => value.replace(/([\\`*_[\]<>|])/g, '\\$1');
-const escapeUrl = (value: string) => value.replace(/[()]/g, character => encodeURIComponent(character));
+const escapeUrl = (value: string) =>
+  value.replace(/[()]/g, (character) => encodeURIComponent(character));
 
 function absoluteLink(value: string | undefined, baseUrl: string): string | undefined {
   if (!value) return undefined;
   try {
     const url = new URL(value, baseUrl);
     return /^https?:$/.test(url.protocol) ? escapeUrl(url.toString()) : undefined;
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 
 function inline(node: DomNode, baseUrl: string): string {
   if (node.type === 'text') return node.data ?? '';
-  const content = (node.children ?? []).map(child => inline(child, baseUrl)).join('');
+  const content = (node.children ?? []).map((child) => inline(child, baseUrl)).join('');
   const tag = node.name?.toLowerCase();
   if (tag === 'br') return '\n';
   if (tag === 'img') {
@@ -61,13 +64,19 @@ function descendants(root: DomNode): DomNode[] {
 }
 
 function tableMarkdown(table: DomNode, baseUrl: string): string[] {
-  const rows = descendants(table).filter(node => node.name === 'tr').map(row =>
-    (row.children ?? []).filter(cell => cell.name === 'th' || cell.name === 'td')
-      .map(cell => clean(inline(cell, baseUrl)).replaceAll('|', '\\|')),
-  ).filter(row => row.length);
+  const rows = descendants(table)
+    .filter((node) => node.name === 'tr')
+    .map((row) =>
+      (row.children ?? [])
+        .filter((cell) => cell.name === 'th' || cell.name === 'td')
+        .map((cell) => clean(inline(cell, baseUrl)).replaceAll('|', '\\|')),
+    )
+    .filter((row) => row.length);
   if (!rows.length) return [];
-  const width = Math.max(...rows.map(row => row.length));
-  const lines = rows.map(row => `| ${[...row, ...Array<string>(width - row.length).fill('')].join(' | ')} |`);
+  const width = Math.max(...rows.map((row) => row.length));
+  const lines = rows.map(
+    (row) => `| ${[...row, ...Array<string>(width - row.length).fill('')].join(' | ')} |`,
+  );
   lines.splice(1, 0, `| ${Array<string>(width).fill('---').join(' | ')} |`);
   return lines;
 }
@@ -75,9 +84,20 @@ function tableMarkdown(table: DomNode, baseUrl: string): string[] {
 /** Port the Python main-content extractor so scraping needs no rendering API. */
 export function htmlToMarkdown(html: string, baseUrl: string): string {
   const $ = load(html);
-  const main = $('main').first().length ? $('main').first() : $('body').first().length ? $('body').first() : $('html').first();
+  const main = $('main').first().length
+    ? $('main').first()
+    : $('body').first().length
+      ? $('body').first()
+      : $('html').first();
   main.find('nav, footer, header, aside, script, style, noscript').remove();
-  main.find('[class]').filter((_index, element) => /sponsors|socialLinks|appPromo|footer|navigation|cookieBanner/i.test($(element).attr('class') ?? '')).remove();
+  main
+    .find('[class]')
+    .filter((_index, element) =>
+      /sponsors|socialLinks|appPromo|footer|navigation|cookieBanner/i.test(
+        $(element).attr('class') ?? '',
+      ),
+    )
+    .remove();
 
   const heading = main.find('h1').first();
   const title = clean(heading.text()) || clean($('title').first().text()) || 'Page';
@@ -101,8 +121,8 @@ export function htmlToMarkdown(html: string, baseUrl: string): string {
     } else if (tag === 'table' && !hasAncestor(node, new Set(['table']))) {
       output.push('', ...tableMarkdown(node, baseUrl), '');
     } else if (tag === 'figure') {
-      const image = descendants(node).find(child => child.name === 'img');
-      const caption = descendants(node).find(child => child.name === 'figcaption');
+      const image = descendants(node).find((child) => child.name === 'img');
+      const caption = descendants(node).find((child) => child.name === 'figcaption');
       if (image) output.push(inline(image, baseUrl), '');
       if (caption) output.push(`*${clean(inline(caption, baseUrl))}*`, '');
     }
@@ -114,7 +134,11 @@ export function htmlToMarkdown(html: string, baseUrl: string): string {
     const fallback = clean(main.text());
     if (fallback && fallback !== title) output.push(escapeText(fallback), '');
   }
-  const rendered = output.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  const rendered =
+    output
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim() + '\n';
   const embedded = embeddedContentMarkdown(html);
   return embedded ?? rendered;
 }

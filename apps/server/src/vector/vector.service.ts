@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { createEmbeddingModel } from '../agent/model/embedding-model';
 import { PGVectorStore } from '@langchain/pgvector';
 import { Document } from '@langchain/core/documents';
@@ -6,13 +6,11 @@ import { Pool } from 'pg';
 import { randomUUID } from 'node:crypto';
 import type { Memory, MemoryInput } from '@united/contracts';
 import { env } from '../config/env';
+import { VectorMetadataRepository } from './vector-metadata.repository';
+import { KNOWLEDGE_TABLE, MEMORY_TABLE } from './vector.constants';
+import { memoryFromMetadata } from './utils/memory';
 
-const DEFAULT_MEMORY: Memory = { enabled: true, responseStyle: 'friendly', notes: '', version: 0, updatedAt: null };
-const KNOWLEDGE_TABLE = 'united_knowledge_vectors';
-const MEMORY_TABLE = 'united_memory_vectors';
-const quote = (identifier: string) => `"${identifier.replaceAll('"', '""')}"`;
-
-/** Owns both official PGVectorStore instances and the small SQL publication boundary. */
+/** Owns embedding/search adapters and coordinates repository-backed revision publication. */
 @Injectable()
 export class VectorService implements OnModuleDestroy {
   readonly pool = new Pool({ connectionString: env().DATABASE_ASYNC_URL });
@@ -20,25 +18,27 @@ export class VectorService implements OnModuleDestroy {
   knowledge!: PGVectorStore;
   memory!: PGVectorStore;
   private initialized?: Promise<void>;
-  /** Qualify SQL table names with the configured application schema. */
-  private table(name: string) { return `${quote(env().DATABASE_SCHEMA)}.${quote(name)}`; }
+  private readonly logger = new Logger(VectorService.name);
 
-  /** Initialize vector stores and lookup indexes once for this process. */
+  constructor(private readonly metadata: VectorMetadataRepository) {}
+
+  /** Initialize the library-owned vector tables once for this process. */
   async initialize(): Promise<void> {
     this.initialized ??= (async () => {
       this.knowledge = await PGVectorStore.initialize(this.embeddings, {
-        pool: this.pool, schemaName: env().DATABASE_SCHEMA, tableName: KNOWLEDGE_TABLE,
-        dimensions: 3072, distanceStrategy: 'cosine',
+        pool: this.pool,
+        schemaName: env().DATABASE_SCHEMA,
+        tableName: KNOWLEDGE_TABLE,
+        dimensions: 3072,
+        distanceStrategy: 'cosine',
       });
       this.memory = await PGVectorStore.initialize(this.embeddings, {
-        pool: this.pool, schemaName: env().DATABASE_SCHEMA, tableName: MEMORY_TABLE,
-        dimensions: 3072, distanceStrategy: 'cosine',
+        pool: this.pool,
+        schemaName: env().DATABASE_SCHEMA,
+        tableName: MEMORY_TABLE,
+        dimensions: 3072,
+        distanceStrategy: 'cosine',
       });
-      const kt = this.table(KNOWLEDGE_TABLE);
-      const mt = this.table(MEMORY_TABLE);
-      await this.pool.query(`CREATE INDEX IF NOT EXISTS united_knowledge_active_idx ON ${kt} ((metadata->>'active'), (metadata->>'type'))`);
-      await this.pool.query(`CREATE INDEX IF NOT EXISTS united_knowledge_path_idx ON ${kt} ((metadata->>'path'), (metadata->>'source'), (metadata->>'type'))`);
-      await this.pool.query(`CREATE INDEX IF NOT EXISTS united_memory_user_idx ON ${mt} ((metadata->>'userId'), (metadata->>'active'))`);
     })();
     return this.initialized;
   }
@@ -46,60 +46,64 @@ export class VectorService implements OnModuleDestroy {
   /** Search only the published knowledge revision, optionally within one source topic. */
   async searchKnowledge(query: string, type?: string) {
     await this.initialize();
-    return this.knowledge.similaritySearchWithScore(query, 8, type ? { active: true, type } : { active: true });
+    return this.knowledge.similaritySearchWithScore(
+      query,
+      8,
+      type ? { active: true, type } : { active: true },
+    );
   }
 
   /** Read the visitor's latest published response preferences. */
   async getMemory(userId: string): Promise<Memory> {
     await this.initialize();
-    const result = await this.pool.query(
-      `SELECT metadata FROM ${this.table(MEMORY_TABLE)} WHERE metadata->>'userId'=$1 AND metadata->>'active'='true' ORDER BY (metadata->>'version')::int DESC LIMIT 1`,
-      [userId],
-    );
-    const m = result.rows[0]?.metadata as Record<string, unknown> | undefined;
-    if (!m) return DEFAULT_MEMORY;
-    return {
-      enabled: Boolean(m.enabled), responseStyle: m.responseStyle as Memory['responseStyle'],
-      notes: String(m.notes ?? ''), version: Number(m.version), updatedAt: String(m.updatedAt),
-    };
+    const metadata = await this.metadata.getMemory(userId);
+    return memoryFromMetadata(metadata ? { ...metadata } : undefined);
   }
 
   /** Stage through PGVectorStore, then switch the active revision atomically. */
   async saveMemory(userId: string, input: MemoryInput): Promise<Memory> {
     await this.initialize();
     const current = await this.getMemory(userId);
-    if (current.version !== input.version) throw new Error('MEMORY_VERSION_CONFLICT');
+    if (current.version !== input.version)
+      throw new ConflictException('Memory changed in another tab');
     const revision = randomUUID();
     const updatedAt = new Date().toISOString();
     const text = `Response style: ${input.responseStyle}. Additional instructions: ${input.notes || 'None'}`;
-    await this.memory.addDocuments([new Document({ pageContent: text, metadata: {
-      userId, active: false, revision, version: current.version + 1,
-      enabled: input.enabled, responseStyle: input.responseStyle, notes: input.notes, updatedAt,
-    } })]);
-    const client = await this.pool.connect();
+    await this.memory.addDocuments([
+      new Document({
+        pageContent: text,
+        metadata: {
+          userId,
+          active: false,
+          revision,
+          version: current.version + 1,
+          enabled: input.enabled,
+          responseStyle: input.responseStyle,
+          notes: input.notes,
+          updatedAt,
+        },
+      }),
+    ]);
     try {
-      await client.query('BEGIN');
-      await client.query(`SELECT id FROM ${this.table('chat_users')} WHERE id=$1 FOR UPDATE`, [userId]);
-      const check = await client.query(`SELECT COALESCE(MAX((metadata->>'version')::int),0) AS version FROM ${this.table(MEMORY_TABLE)} WHERE metadata->>'userId'=$1 AND metadata->>'active'='true'`, [userId]);
-      if (Number(check.rows[0].version) !== input.version) throw new Error('MEMORY_VERSION_CONFLICT');
-      await client.query(`UPDATE ${this.table(MEMORY_TABLE)} SET metadata=jsonb_set(metadata,'{active}','false'::jsonb) WHERE metadata->>'userId'=$1 AND metadata->>'active'='true'`, [userId]);
-      await client.query(`UPDATE ${this.table(MEMORY_TABLE)} SET metadata=jsonb_set(metadata,'{active}','true'::jsonb) WHERE metadata->>'userId'=$1 AND metadata->>'revision'=$2`, [userId, revision]);
-      await client.query('COMMIT');
+      await this.metadata.publishMemory(userId, revision, input.version);
     } catch (error) {
-      await client.query('ROLLBACK');
-      await this.memory.delete({ filter: { userId, revision } }).catch(() => undefined);
+      await this.metadata.discardMemory(userId, revision).catch((cleanupError) => {
+        this.logger.warn(`Could not discard memory revision ${revision}: ${String(cleanupError)}`);
+      });
       throw error;
-    } finally { client.release(); }
-    await this.memory.delete({ filter: { userId, active: false } });
+    }
     return { ...input, version: input.version + 1, updatedAt };
   }
 
   /** Load preferences through the vector store for the agent's runtime context. */
   async runtimeMemory(userId: string): Promise<Memory> {
     await this.initialize();
-    const found = await this.memory.similaritySearch('Response style and answer preferences', 1, { userId, active: true });
+    const found = await this.memory.similaritySearch('Response style and answer preferences', 1, {
+      userId,
+      active: true,
+    });
     const m = found[0]?.metadata;
-    return m ? { enabled: Boolean(m.enabled), responseStyle: m.responseStyle, notes: m.notes, version: Number(m.version), updatedAt: m.updatedAt } : DEFAULT_MEMORY;
+    return memoryFromMetadata(m);
   }
 
   /** Embed and store a batch of chunks as an unpublished revision. */
@@ -110,41 +114,17 @@ export class VectorService implements OnModuleDestroy {
 
   /** Publish the complete rebuild atomically; callers hold the document workflow lock. */
   async publishKnowledgeRevision(revision: string): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(
-        `UPDATE ${this.table(KNOWLEDGE_TABLE)}
-         SET metadata=jsonb_set(metadata, '{active}', 'false'::jsonb)
-         WHERE metadata->>'active'='true'`,
-      );
-      await client.query(
-        `UPDATE ${this.table(KNOWLEDGE_TABLE)}
-         SET metadata=jsonb_set(metadata, '{active}', 'true'::jsonb)
-         WHERE metadata->>'revision'=$1`,
-        [revision],
-      );
-      await client.query(
-        `UPDATE ${this.table('source_documents')} SET "activeRevision"=$1`,
-        [revision],
-      );
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    await this.metadata.publishKnowledge(revision);
   }
 
   /** Remove only unpublished chunks after a failed rebuild, never the active index. */
   async discardKnowledgeRevision(revision: string): Promise<void> {
-    await this.knowledge.delete({ filter: { revision, active: false } });
+    await this.metadata.discardKnowledge(revision);
   }
 
   /** Reclaim old revisions after successful publication. */
   async deleteInactiveKnowledge(): Promise<void> {
-    await this.knowledge.delete({ filter: { active: false } });
+    await this.metadata.deleteInactiveKnowledge();
   }
 
   /** Release dedicated vector-store clients before shutting down their shared pool. */

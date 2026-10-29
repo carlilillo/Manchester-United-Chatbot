@@ -6,7 +6,16 @@ describe('agent model request transport', () => {
     const model = createChatModel({ model: 'gpt-6.1-sol', apiKey: 'test-key' });
     const params = model.invocationParams({
       reasoning: { effort: 'medium' },
-      tools: [{ type: 'function', function: { name: 'lookup', description: 'Find a document', parameters: { type: 'object', properties: {} } } }],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'lookup',
+            description: 'Find a document',
+            parameters: { type: 'object', properties: {} },
+          },
+        },
+      ],
     });
 
     expect(model.useResponsesApi).toBe(true);
@@ -16,7 +25,9 @@ describe('agent model request transport', () => {
   });
 
   it('preserves the Responses route in configured copies used by LangChain', () => {
-    const configured = createChatModel({ model: 'gpt-6.1-sol', apiKey: 'test-key' }).withConfig({ tags: ['agent'] });
+    const configured = createChatModel({ model: 'gpt-6.1-sol', apiKey: 'test-key' }).withConfig({
+      tags: ['agent'],
+    });
     expect(configured).toHaveProperty('useResponsesApi', true);
   });
 });

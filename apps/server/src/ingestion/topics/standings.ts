@@ -10,10 +10,21 @@ export function standingsRequest(html: string, source: string): { url: string; t
   for (const record of nextRecords(html)) {
     for (const props of walk(record)) {
       if (!Array.isArray(props.headRowCells) || !Array.isArray(props.competitions)) continue;
-      const competition = props.competitions.find(item => isObject(item) && item.slug === competitionSlug);
+      const competition = props.competitions.find(
+        (item) => isObject(item) && item.slug === competitionSlug,
+      );
       if (!isObject(competition)) continue;
-      const params = { teamId: props.teamId, competitionId: competition.dataProviderId, seasonId: props.seasonId };
-      if (!Object.values(params).every(value => typeof value === 'string' && /^[a-z0-9]+$/i.test(value))) continue;
+      const params = {
+        teamId: props.teamId,
+        competitionId: competition.dataProviderId,
+        seasonId: props.seasonId,
+      };
+      if (
+        !Object.values(params).every(
+          (value) => typeof value === 'string' && /^[a-z0-9]+$/i.test(value),
+        )
+      )
+        continue;
       const url = new URL(TABLE_ENDPOINT);
       for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
       url.searchParams.set('locale', 'en-GB');
@@ -24,21 +35,45 @@ export function standingsRequest(html: string, source: string): { url: string; t
 }
 
 /** Render actual table rows; refuse navigation-only or malformed responses. */
-export function standingsMarkdown(data: unknown, title: string, season: string, apiUrl: string): string {
+export function standingsMarkdown(
+  data: unknown,
+  title: string,
+  season: string,
+  apiUrl: string,
+): string {
   if (!isObject(data) || !Array.isArray(data.rows) || !data.rows.length) {
     throw new Error(`No standings rows returned for ${title}`);
   }
-  const fields = ['position', 'played', 'won', 'drawn', 'lost', 'goalsFor', 'goalsAgainst', 'goalDifference', 'points'];
-  const rows = data.rows.map(row => {
-    if (!isObject(row) || !isObject(row.club) || typeof row.club.name !== 'string' ||
-        fields.some(field => !['number', 'string'].includes(typeof row[field]) ||
-          clean(row[field]) === '' || !Number.isFinite(Number(row[field])))) {
+  const fields = [
+    'position',
+    'played',
+    'won',
+    'drawn',
+    'lost',
+    'goalsFor',
+    'goalsAgainst',
+    'goalDifference',
+    'points',
+  ];
+  const rows = data.rows.map((row) => {
+    if (
+      !isObject(row) ||
+      !isObject(row.club) ||
+      typeof row.club.name !== 'string' ||
+      fields.some(
+        (field) =>
+          !['number', 'string'].includes(typeof row[field]) ||
+          clean(row[field]) === '' ||
+          !Number.isFinite(Number(row[field])),
+      )
+    ) {
       throw new Error(`Invalid standings row for ${title}`);
     }
     const form = Array.isArray(row.recentForm) ? row.recentForm.map(clean).join(' ') : '';
     const next = isObject(row.nextOpponentClub) ? clean(row.nextOpponentClub.name) : '';
-    return [row.position, row.club.name, ...fields.slice(1).map(field => row[field]), form, next]
-      .map(value => markdownText(clean(value))).join(' | ');
+    return [row.position, row.club.name, ...fields.slice(1).map((field) => row[field]), form, next]
+      .map((value) => markdownText(clean(value)))
+      .join(' | ');
   });
   return [
     `# ${title} — ${season.slice(0, 4)}/${season.slice(4)}`,
@@ -47,7 +82,7 @@ export function standingsMarkdown(data: unknown, title: string, season: string, 
     '',
     '| Position | Club | Played | Won | Drawn | Lost | GF | GA | GD | Points | Form | Next opponent |',
     '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
-    ...rows.map(row => `| ${row} |`),
+    ...rows.map((row) => `| ${row} |`),
   ].join('\n');
 }
 
@@ -65,7 +100,14 @@ export async function scrapeStandings(session: ScrapeSession, season: string): P
       const html = await session.html(source, path);
       const request = standingsRequest(html, source);
       const data = await session.json(request.url, path);
-      session.add(source, path, 'matches', standingsMarkdown(data, request.title, season, request.url));
-    } catch (error) { session.reportError(`${source}: ${String(error)}`); }
+      session.add(
+        source,
+        path,
+        'matches',
+        standingsMarkdown(data, request.title, season, request.url),
+      );
+    } catch (error) {
+      session.reportError(`${source}: ${String(error)}`);
+    }
   }
 }

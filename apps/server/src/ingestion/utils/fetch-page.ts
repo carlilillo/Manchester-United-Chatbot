@@ -16,7 +16,10 @@ export class NonRetryableFetchError extends Error {}
 
 /** Preserve HTTP status so topic workflows can choose an appropriate public fallback. */
 export class HttpFetchError extends NonRetryableFetchError {
-  constructor(readonly status: number, url: string) {
+  constructor(
+    readonly status: number,
+    url: string,
+  ) {
     super(`HTTP ${status} at ${url}`);
   }
 }
@@ -33,7 +36,9 @@ function retryDelay(response: Response | undefined, attempt: number): number {
   const retryAfter = response?.headers.get('retry-after');
   if (retryAfter) {
     const seconds = Number(retryAfter);
-    const duration = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - Date.now();
+    const duration = Number.isFinite(seconds)
+      ? seconds * 1000
+      : Date.parse(retryAfter) - Date.now();
     if (Number.isFinite(duration)) return Math.min(Math.max(duration, 0), 30_000);
   }
   return attempt * 2_000;
@@ -45,9 +50,15 @@ export type FetchPageOptions = {
 };
 
 /** Fetch a public source with bounded retries and validate every redirect before following it. */
-async function fetchSource(source: string, format: 'html' | 'json', options: FetchPageOptions): Promise<string> {
+async function fetchSource(
+  source: string,
+  format: 'html' | 'json',
+  options: FetchPageOptions,
+): Promise<string> {
   const request = options.fetchImpl ?? fetch;
-  const sleep = options.sleep ?? (milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)));
+  const sleep =
+    options.sleep ??
+    ((milliseconds) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
   const initial = officialUrl(source);
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -60,13 +71,18 @@ async function fetchSource(source: string, format: 'html' | 'json', options: Fet
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; UnitedArchive/1.0)',
-            Accept: format === 'json' ? 'application/json' : 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+            Accept:
+              format === 'json'
+                ? 'application/json'
+                : 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
           },
         });
         if (response.status >= 300 && response.status < 400) {
           const location = response.headers.get('location');
-          if (!location) throw new NonRetryableFetchError(`Redirect without Location at ${current}`);
-          if (redirects === MAX_REDIRECTS) throw new NonRetryableFetchError(`Too many redirects at ${source}`);
+          if (!location)
+            throw new NonRetryableFetchError(`Redirect without Location at ${current}`);
+          if (redirects === MAX_REDIRECTS)
+            throw new NonRetryableFetchError(`Too many redirects at ${source}`);
           current = officialUrl(new URL(location, current).toString());
           continue;
         }
@@ -78,11 +94,16 @@ async function fetchSource(source: string, format: 'html' | 'json', options: Fet
         if (format === 'json' && response.status === 204) return 'null';
         const contentType = response.headers.get('content-type');
         const expectedType = format === 'json' ? /json/i : /html|xhtml/i;
-        if (contentType && !expectedType.test(contentType)) throw new NonRetryableFetchError(`Expected ${format.toUpperCase()} at ${current}, got ${contentType}`);
+        if (contentType && !expectedType.test(contentType))
+          throw new NonRetryableFetchError(
+            `Expected ${format.toUpperCase()} at ${current}, got ${contentType}`,
+          );
         return await response.text();
       }
-      if (response.status !== 429 && response.status < 500) throw new HttpFetchError(response.status, current.toString());
-      if (attempt === MAX_ATTEMPTS) throw new Error(`HTTP ${response.status} at ${current} after ${attempt} attempts`);
+      if (response.status !== 429 && response.status < 500)
+        throw new HttpFetchError(response.status, current.toString());
+      if (attempt === MAX_ATTEMPTS)
+        throw new Error(`HTTP ${response.status} at ${current} after ${attempt} attempts`);
     } catch (error) {
       if (error instanceof NonRetryableFetchError) throw error;
       if (attempt === MAX_ATTEMPTS) throw error;

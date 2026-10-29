@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+man_united_data_script/
+src/agent/
+src/config/
+src/migrations/
+src/app.module.ts
+src/main.ts

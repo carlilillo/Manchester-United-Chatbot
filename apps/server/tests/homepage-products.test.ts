@@ -5,9 +5,12 @@ import { ScrapeSession } from '../src/ingestion/utils/scrape-session';
 import { isObsoleteCapture } from '../src/ingestion/utils/obsolete-captures';
 
 const source = 'https://www.manutd.com/en';
-const story = (title: string, slug = title) => `<article data-testid="article-card"><a href="/en/news/${slug}">Duplicate link title</a><img src="/story.jpg"/><a href="/en/news/category/news">News</a><h3>${title}</h3><span>1 hour ago</span></article>`;
-const news = (title: string, cards: string) => `<div data-component="NewsCarousel"><h2>${title}</h2>${cards}</div>`;
-const flight = (value: unknown) => `<script>self.__next_f.push(${JSON.stringify([1, `0:${JSON.stringify(value)}\n`])})</script>`;
+const story = (title: string, slug = title) =>
+  `<article data-testid="article-card"><a href="/en/news/${slug}">Duplicate link title</a><img src="/story.jpg"/><a href="/en/news/category/news">News</a><h3>${title}</h3><span>1 hour ago</span></article>`;
+const news = (title: string, cards: string) =>
+  `<div data-component="NewsCarousel"><h2>${title}</h2>${cards}</div>`;
+const flight = (value: unknown) =>
+  `<script>self.__next_f.push(${JSON.stringify([1, `0:${JSON.stringify(value)}\n`])})</script>`;
 
 describe('structured homepage', () => {
   it('groups cards in page order and removes responsive duplicates, controls and boilerplate', () => {
@@ -22,21 +25,34 @@ describe('structured homepage', () => {
     expect(md).not.toMatch(/Next slide|Duplicate link|1 hour ago|category\/news/);
   });
 
-  it.each(['Tickets and tours', 'Become a Member today'])('excludes %s and everything after it', title => {
-    const md = homepageMarkdown(`<main>${news('Latest news', story('Keep'))}<section data-component="PromoCarousel"><h3>${title}</h3>${story('Excluded')}</section>${news('Later news', story('Must not appear'))}<footer>${story('Footer')}</footer></main>`);
-    expect(md).toContain('### Keep');
-    expect(md).not.toMatch(/Tickets|Member|Excluded|Later news|Must not appear|Footer/);
-  });
+  it.each(['Tickets and tours', 'Become a Member today'])(
+    'excludes %s and everything after it',
+    (title) => {
+      const md = homepageMarkdown(
+        `<main>${news('Latest news', story('Keep'))}<section data-component="PromoCarousel"><h3>${title}</h3>${story('Excluded')}</section>${news('Later news', story('Must not appear'))}<footer>${story('Footer')}</footer></main>`,
+      );
+      expect(md).toContain('### Keep');
+      expect(md).not.toMatch(/Tickets|Member|Excluded|Later news|Must not appear|Footer/);
+    },
+  );
 
   it('recovers a gated video destination without including login controls or later embedded stories', () => {
-    const md = homepageMarkdown(`<main><section data-component="PlaylistCarousel"><h2>Women's videos</h2><section data-testid="video-card"><button>Login to Watch</button><h5>Interview</h5><img src="/video.jpg"/></section></section></main>` + flight([{ title: 'Interview', slug: '/en/mutv/videos/detail/interview' }, { title: 'Unrelated', slug: '/en/mutv/videos/detail/unrelated' }]));
+    const md = homepageMarkdown(
+      `<main><section data-component="PlaylistCarousel"><h2>Women's videos</h2><section data-testid="video-card"><button>Login to Watch</button><h5>Interview</h5><img src="/video.jpg"/></section></section></main>` +
+        flight([
+          { title: 'Interview', slug: '/en/mutv/videos/detail/interview' },
+          { title: 'Unrelated', slug: '/en/mutv/videos/detail/unrelated' },
+        ]),
+    );
     expect(md).toContain('https://www.manutd.com/en/mutv/videos/detail/interview');
     expect(md).not.toMatch(/Login|Unrelated/);
   });
 
   it('deduplicates match summaries even when the mobile copy has no label', () => {
     const match = `<article data-testid="fixture-summary-card"><span data-testid="fixture-summary-card__home-name">United</span><span data-testid="fixture-summary-card__away-name">Opponent</span><span data-testid="fixture-summary-card__score-container">2 - 0</span><span data-testid="fixture-summary-card__competition">League</span><a href="/en/matches/game">Match Centre</a></article>`;
-    const md = homepageMarkdown(`<main><section data-component="FixtureSummaryBlock"><h2>Matches</h2><li><span class="fixtureSummaryBlock_carouselCardLabel">Last Match</span>${match}</li>${match}</section></main>`);
+    const md = homepageMarkdown(
+      `<main><section data-component="FixtureSummaryBlock"><h2>Matches</h2><li><span class="fixtureSummaryBlock_carouselCardLabel">Last Match</span>${match}</li>${match}</section></main>`,
+    );
     expect(md.match(/United v Opponent/g)).toHaveLength(1);
     expect(md).toContain('- Score: 2 - 0');
     expect(md).toContain('- Competition: League');
@@ -44,9 +60,11 @@ describe('structured homepage', () => {
 
   it('captures only highlights and rejects an empty/loading homepage', async () => {
     const session = new ScrapeSession(vi.fn());
-    vi.spyOn(session, 'html').mockResolvedValue(`<main>${news('Latest news', story('Story'))}</main>`);
+    vi.spyOn(session, 'html').mockResolvedValue(
+      `<main>${news('Latest news', story('Story'))}</main>`,
+    );
     await scrapeHomepage(session);
-    expect(session.pages.map(page => page.path)).toEqual(['homepage/highlights.md']);
+    expect(session.pages.map((page) => page.path)).toEqual(['homepage/highlights.md']);
     expect(() => homepageMarkdown('<main>Loading</main>')).toThrow('No homepage highlights');
     expect(isObsoleteCapture('homepage/store-highlights.md', source)).toBe(true);
     expect(isObsoleteCapture('homepage/tickets-and-tours.md', source)).toBe(true);
@@ -68,7 +86,10 @@ describe('product recommendations', () => {
   });
 
   it('handles products without a look section and removes an empty recommendation heading', () => {
-    const md = productMarkdown('<main><h1>United mug</h1><p>Ceramic mug with a printed club crest.</p><div class="product-carousel"><h2>You may also like</h2></div></main>', 'https://store.manutd.com/en-gb/p/mug');
+    const md = productMarkdown(
+      '<main><h1>United mug</h1><p>Ceramic mug with a printed club crest.</p><div class="product-carousel"><h2>You may also like</h2></div></main>',
+      'https://store.manutd.com/en-gb/p/mug',
+    );
     expect(md).toContain('Ceramic mug');
     expect(md).not.toMatch(/Complete the Look|You may also like/);
   });

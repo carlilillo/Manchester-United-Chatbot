@@ -12,12 +12,19 @@ export function absoluteUrl(value: string | undefined, base: string): string | u
     if (!['https:', 'http:'].includes(url.protocol)) return undefined;
     url.hash = '';
     return url.toString();
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 
 /** Keep article pages while excluding category, tag, and pagination navigation. */
 export function isNewsArticle(url: URL): boolean {
-  return url.origin === CLUB && /^\/en\/news\/(?!category(?:\/|$)|listing(?:\/|$)|page(?:\/|$)|tag(?:s)?(?:\/|$))[^/]+(?:\/[^/]+)?\/?$/.test(url.pathname);
+  return (
+    url.origin === CLUB &&
+    /^\/en\/news\/(?!category(?:\/|$)|listing(?:\/|$)|page(?:\/|$)|tag(?:s)?(?:\/|$))[^/]+(?:\/[^/]+)?\/?$/.test(
+      url.pathname,
+    )
+  );
 }
 
 /** Collect unique links from page content that satisfy a topic-specific predicate. */
@@ -34,7 +41,9 @@ export function links(html: string, base: string, predicate: (url: URL) => boole
 /** Derive a readable filename stem from the source URL. */
 export function nameFor(url: string): string {
   return (new URL(url).pathname.split('/').filter(Boolean).at(-1) || 'index')
-    .toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 90);
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .slice(0, 90);
 }
 
 /** Keep filenames stable and disambiguate sources with the same final path segment. */
@@ -44,4 +53,5 @@ export function uniqueNameFor(url: string): string {
 
 /** Escape text and destinations used in generated Markdown listings. */
 export const markdownText = (value: string) => value.replace(/([\\`*_[\]<>|])/g, '\\$1');
-export const markdownUrl = (value: string) => value.replace(/[()\s]/g, character => encodeURIComponent(character));
+export const markdownUrl = (value: string) =>
+  value.replace(/[()\s]/g, (character) => encodeURIComponent(character));

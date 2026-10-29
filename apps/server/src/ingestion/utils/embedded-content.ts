@@ -1,4 +1,4 @@
-import { clean, isObject, nextRecords, walk } from './utils/next-data';
+import { clean, isObject, nextRecords, walk } from './next-data';
 
 function richText(value: unknown): string {
   if (!isObject(value)) return Array.isArray(value) ? value.map(richText).join('') : '';
@@ -9,12 +9,22 @@ function richText(value: unknown): string {
 function richBlocks(value: unknown): string[] {
   const output: string[] = [];
   function visit(node: unknown): void {
-    if (Array.isArray(node)) { node.forEach(visit); return; }
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
     if (!isObject(node)) return;
     const kind = node.nodeType;
     if (typeof kind === 'string' && /^(paragraph|heading-[1-4]|list-item)$/.test(kind)) {
       const text = clean(richText(node));
-      if (text) output.push(kind === 'paragraph' ? text : kind === 'list-item' ? `- ${text}` : `${'#'.repeat(Number(kind.at(-1)))} ${text}`);
+      if (text)
+        output.push(
+          kind === 'paragraph'
+            ? text
+            : kind === 'list-item'
+              ? `- ${text}`
+              : `${'#'.repeat(Number(kind.at(-1)))} ${text}`,
+        );
       return;
     }
     visit(node.content);
@@ -27,8 +37,14 @@ function richBlocks(value: unknown): string[] {
 export function embeddedContentMarkdown(html: string): string | undefined {
   for (const record of nextRecords(html)) {
     for (const item of walk(record)) {
-      if (!('bodyCopy' in item) || !(typeof item.articleTitle === 'string' ||
-          typeof item.title === 'string' && 'summary' in item)) continue;
+      if (
+        !('bodyCopy' in item) ||
+        !(
+          typeof item.articleTitle === 'string' ||
+          (typeof item.title === 'string' && 'summary' in item)
+        )
+      )
+        continue;
       const bodyCopy = item.bodyCopy;
       let blocks: string[] = [];
       if (isObject(bodyCopy)) {

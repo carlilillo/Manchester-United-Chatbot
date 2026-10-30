@@ -1,19 +1,18 @@
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { CapturedPage } from '../types';
 
 export const MARKDOWN_DIRECTORY = path.resolve(__dirname, '../../../man_united_data_script');
 
-/** Replace a capture atomically, preserving the previous file if writing fails. */
-export async function saveMarkdownFile(page: CapturedPage): Promise<string> {
-  const destination = path.join(MARKDOWN_DIRECTORY, page.path);
-  const temporary = `${destination}.tmp`;
-  await mkdir(path.dirname(destination), { recursive: true });
-  try {
-    await writeFile(temporary, page.markdown, 'utf8');
-    await rename(temporary, destination);
-  } finally {
-    await rm(temporary, { force: true });
+/** Write a document at its archive path, refusing paths that escape the export directory. */
+export async function saveMarkdownFile(
+  page: Pick<CapturedPage, 'path' | 'markdown'>,
+): Promise<string> {
+  const destination = path.resolve(MARKDOWN_DIRECTORY, page.path);
+  if (!destination.startsWith(`${MARKDOWN_DIRECTORY}${path.sep}`)) {
+    throw new Error(`Archive path escapes the Markdown directory: ${page.path}`);
   }
+  await mkdir(path.dirname(destination), { recursive: true });
+  await writeFile(destination, page.markdown, 'utf8');
   return destination;
 }

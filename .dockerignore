@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/.DS_Store
+.git
+.pnpm-store
+.agents
+.claude
+.env
+.env.*
+!.env.example
+apps/server/man_united_data_script
+apps/server/scrape_scripts/.cache
+*.log
+Dockerfile
+.dockerignore

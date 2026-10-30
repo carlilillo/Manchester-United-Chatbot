@@ -1,21 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { IngestionService } from '../src/ingestion/ingestion.service';
 import { scrapeAll } from '../src/ingestion/scrapers';
 
 vi.mock('../src/config/env', () => ({ env: () => ({}) }));
 vi.mock('../src/ingestion/scrapers', () => ({ scrapeAll: vi.fn() }));
-vi.mock('../src/ingestion/utils/obsolete-captures', () => ({
-  removeObsoleteFiles: vi.fn().mockResolvedValue(undefined),
-}));
-vi.mock('node:fs/promises', () => ({
-  mkdir: vi.fn(),
-  rename: vi.fn(),
-  writeFile: vi.fn(),
-  rm: vi.fn(),
-}));
+vi.mock('node:fs/promises', () => ({ mkdir: vi.fn(), writeFile: vi.fn(), rm: vi.fn() }));
 
 const page = {
   path: 'news/articles/united-win.md',
@@ -23,7 +14,6 @@ const page = {
   type: 'news',
   markdown: '# United win\n\nA strong performance from the team.',
 };
-const destination = path.resolve(__dirname, '../man_united_data_script', page.path);
 
 function setup() {
   const repository = { create: vi.fn((value) => value), save: vi.fn(async (value) => value) };
@@ -50,19 +40,13 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('source ingestion without embeddings', () => {
-  it('saves the full Markdown and upserts database batches of at most 100', async () => {
+  it('upserts the full Markdown in database batches of at most 100', async () => {
     const { service, documents, runner } = setup();
     const pages = Array.from({ length: 101 }, (_, index) => ({
       ...page,
       path: `news/articles/story-${index}.md`,
     }));
     vi.mocked(scrapeAll).mockResolvedValue(pages);
-    documents.saveBatch.mockImplementation(async (batch) => {
-      for (const source of batch) {
-        const target = path.resolve(__dirname, '../man_united_data_script', source.path);
-        expect(rename).toHaveBeenCalledWith(`${target}.tmp`, target);
-      }
-    });
 
     await expect(service.run()).resolves.toMatchObject({
       status: 'completed',
@@ -75,19 +59,15 @@ describe('source ingestion without embeddings', () => {
     expect(runner.release).toHaveBeenCalledOnce();
   });
 
-  it('saves and logs the mirrored Markdown destination on every capture', async () => {
+  it('does not write the Markdown archive to the filesystem', async () => {
     const { service } = setup();
     await service.run();
-    await service.run();
-    expect(mkdir).toHaveBeenCalledWith(path.dirname(destination), { recursive: true });
-    expect(writeFile).toHaveBeenCalledWith(`${destination}.tmp`, page.markdown, 'utf8');
-    expect(rename).toHaveBeenCalledTimes(2);
-    expect(Logger.prototype.log).toHaveBeenCalledWith(
-      `Saved Markdown: ${page.source} -> ${destination}`,
-    );
+    expect(mkdir).not.toHaveBeenCalled();
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(rm).not.toHaveBeenCalled();
   });
 
-  it('keeps Markdown on disk if the database save fails', async () => {
+  it('records a database failure for every page in the batch', async () => {
     const { service, documents } = setup();
     documents.saveBatch.mockRejectedValueOnce(new Error('Database unavailable'));
     await expect(service.run()).resolves.toMatchObject({
@@ -95,25 +75,9 @@ describe('source ingestion without embeddings', () => {
       updated: 0,
       failed: 1,
     });
-    expect(rename).toHaveBeenCalledWith(`${destination}.tmp`, destination);
     expect(Logger.prototype.error).toHaveBeenCalledWith(
       expect.stringContaining('Database unavailable'),
     );
-  });
-
-  it('preserves the previous file on a failed write and stores other captures', async () => {
-    const { service, documents } = setup();
-    const other = { ...page, path: 'store/products/shirt.md' };
-    vi.mocked(scrapeAll).mockResolvedValue([page, other]);
-    vi.mocked(writeFile).mockRejectedValueOnce(new Error('Disk full'));
-    await expect(service.run()).resolves.toMatchObject({
-      status: 'partial',
-      updated: 1,
-      failed: 1,
-    });
-    expect(rename).not.toHaveBeenCalledWith(`${destination}.tmp`, destination);
-    expect(rm).toHaveBeenCalledWith(`${destination}.tmp`, { force: true });
-    expect(documents.saveBatch).toHaveBeenCalledWith([other]);
   });
 
   it('logs and records scrape failures while saving successful pages', async () => {

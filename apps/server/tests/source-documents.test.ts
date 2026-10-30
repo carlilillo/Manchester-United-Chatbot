@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { SourceDocumentService } from '../src/ingestion/source-document.service';
 import { contentHash } from '../src/ingestion/utils/content-hash';
+
+vi.mock('node:fs/promises', () => ({ mkdir: vi.fn(), writeFile: vi.fn(), rm: vi.fn() }));
+const directory = path.resolve(__dirname, '../man_united_data_script');
 
 describe('database source archive', () => {
   it('looks up exact paths in the source archive without filtering by vector publication', async () => {
@@ -131,5 +136,38 @@ describe('database source archive', () => {
       ]),
     );
     expect(remove).toHaveBeenCalledWith(['store-list', 'ticket-list', 'catalog', 'navigation']);
+  });
+
+  it('recreates the Markdown directory from the archive, keeping the newest source per path', async () => {
+    vi.clearAllMocks();
+    const order: string[] = [];
+    vi.mocked(rm).mockImplementation(async () => void order.push('rm'));
+    vi.mocked(writeFile).mockImplementation(async () => void order.push('write'));
+    const documents = [
+      { id: '1', path: 'news/one.md', markdown: 'Old', updatedAt: new Date('2026-01-01') },
+      { id: '2', path: 'news/two.md', markdown: 'Two', updatedAt: new Date('2026-01-01') },
+      { id: '3', path: 'news/one.md', markdown: 'New', updatedAt: new Date('2026-02-01') },
+      { id: '4', path: 'news/one.md', markdown: 'Stale', updatedAt: new Date('2025-12-01') },
+    ];
+    const find = vi.fn().mockResolvedValueOnce(documents).mockResolvedValueOnce([]);
+    const service = new SourceDocumentService({ find } as never);
+    await expect(service.exportMarkdown()).resolves.toEqual({ directory, written: 2 });
+    expect(rm).toHaveBeenCalledWith(directory, { recursive: true, force: true });
+    expect(order[0]).toBe('rm');
+    expect(mkdir).toHaveBeenCalledWith(path.join(directory, 'news'), { recursive: true });
+    expect(vi.mocked(writeFile).mock.calls).toEqual([
+      [path.join(directory, 'news/one.md'), 'Old', 'utf8'],
+      [path.join(directory, 'news/two.md'), 'Two', 'utf8'],
+      [path.join(directory, 'news/one.md'), 'New', 'utf8'],
+    ]);
+  });
+
+  it('refuses to export a document whose path escapes the Markdown directory', async () => {
+    vi.clearAllMocks();
+    const documents = [{ id: '1', path: '../outside.md', markdown: 'x', updatedAt: new Date() }];
+    const find = vi.fn().mockResolvedValueOnce(documents).mockResolvedValueOnce([]);
+    const service = new SourceDocumentService({ find } as never);
+    await expect(service.exportMarkdown()).rejects.toThrow('escapes the Markdown directory');
+    expect(writeFile).not.toHaveBeenCalled();
   });
 });

@@ -53,15 +53,16 @@ Run these from the repository root. The root scripts forward to this package.
 pnpm db:setup     # create the schema, run migrations, initialize LangGraph and pgvector tables
 pnpm db:migrate   # apply pending TypeORM migrations only
 pnpm db:revert    # revert the latest TypeORM migration
-pnpm ingest       # fetch pages, save Markdown, store full source documents
+pnpm ingest       # fetch pages and store full source documents
 pnpm vectorize    # rebuild the vector index from stored documents
+pnpm export:markdown  # write stored source documents to man_united_data_script/ for inspection
 pnpm --filter @united/server dev     # API only, at http://localhost:3000/api
 pnpm --filter @united/server start   # run the compiled build in dist/
 ```
 
-Run `pnpm db:setup` once before first starting the server on a fresh database. `ingest` and `vectorize` also apply pending migrations first. This includes the migration that lets sources exist before their first vectorization.
+Run `pnpm db:setup` once before first starting the server on a fresh database. `ingest`, `vectorize` and `export:markdown` also apply pending migrations first. This includes the migration that lets sources exist before their first vectorization.
 
-The two workflows are independent. Ingestion does not create embeddings, and vectorization does not fetch websites. After changing extraction code, run `pnpm ingest` and then `pnpm vectorize`. Regenerating Markdown files alone updates neither the database documents nor the embeddings.
+The two workflows are independent. Ingestion does not create embeddings, and vectorization does not fetch websites. After changing extraction code, run `pnpm ingest` and then `pnpm vectorize`. The Markdown export is read-only: editing exported files updates neither the database documents nor the embeddings.
 
 `RefreshService` runs ingestion followed by vectorization on the `INGEST_CRON` schedule (03:00 `Europe/Dublin` by default).
 
@@ -70,7 +71,7 @@ The two workflows are independent. Ingestion does not create embeddings, and vec
 | Path               | Responsibility                                                              |
 | ------------------ | --------------------------------------------------------------------------- |
 | `src/main.ts`      | HTTP bootstrap                                                              |
-| `src/cli.ts`       | `migrate`, `revert`, `setup`, `ingest` and `vectorize` commands             |
+| `src/cli.ts`       | `migrate`, `revert`, `setup`, `ingest`, `vectorize` and `export-markdown`   |
 | `src/controllers/` | HTTP input and output for session, memory and chats                         |
 | `src/services/`    | Chat, run, session, persistence and scheduled-refresh coordination          |
 | `src/agent/`       | Deep Agent assembly, prompts, models, tools, backends and source collection |
@@ -102,7 +103,7 @@ Both vector stores are passed to the agent in its runtime context. An active use
 
 Workflow code lives in `src/ingestion/`. Its `utils/` folder holds fetching, HTML-to-Markdown conversion, hashing, calendar and file helpers.
 
-Ingestion fetches official HTML pages directly, with at most two requests at once. It converts their main content to Markdown locally. Each converted page is saved atomically under `man_united_data_script/`, grouped by topic folders such as `news/pages/`, `news/articles/` and `store/products/`.
+Ingestion fetches official HTML pages directly, with at most two requests at once. It converts their main content to Markdown locally and writes nothing to the filesystem. To inspect the archive, run `pnpm export:markdown`. It deletes `man_united_data_script/`, then recreates it from `source_documents`, grouped by topic folders such as `news/pages/`, `news/articles/` and `store/products/`. When several sources share a path, the most recently updated one is written.
 
 Full source documents are upserted into `source_documents` in batches of 100, using the natural key `(path, source, type)`. Ingestion does not initialize embeddings or the chat agent. Each run is recorded in `ingestion_runs`, with stored document counts and any partial failures. A fetch or conversion failure keeps the previous capture.
 
@@ -110,7 +111,7 @@ Full source documents are upserted into `source_documents` in batches of 100, us
 
 Extractors in `src/ingestion/topics/` handle each section's content format.
 
-- **Homepage.** Highlights use section headings and one title/source/image entry per card, with labelled match facts. Extraction stops at the first “Tickets and tours” or “Become a Member today” section. The former `homepage/store-highlights.md` and `homepage/tickets-and-tours.md` captures are removed from the archive and database during ingestion.
+- **Homepage.** Highlights use section headings and one title/source/image entry per card, with labelled match facts. Extraction stops at the first “Tickets and tours” or “Become a Member today” section. The former `homepage/store-highlights.md` and `homepage/tickets-and-tours.md` captures are removed from the database during ingestion.
 - **News.** Listing files contain one title, article URL and image URL per story. Responsive duplicates and category navigation are discarded. Article files keep the story content.
 - **Matches.** Fixtures cover the current calendar month and the next three. Results cover the current month and the previous two. Month boundaries use `Europe/Dublin` and roll across years. Each monthly calendar is fetched once per team and games are deduplicated. If any required month fails, the previous aggregate is kept unchanged. Fixtures and results come from the page's embedded Next.js data, not its loading placeholder. Reports follow explicit **Match Report** links and require written article content. Team navigation, generic table pages and match-centre shells are not saved as reports.
 - **People.** Player listings include names, squad numbers, images and positions. Staff listings include names, roles and images. Helpers in `src/ingestion/people/` extract only roster cards and biographies, not related news or profile navigation. Individual files include available bio cards, United Career totals and current profile statistics (Key Stats, Shooting or Goalkeeping, Possession, Defending), taken from the site's public feeds. Career and season totals stay separate. Missing values are omitted and zeroes are kept. Optional feed failures are logged without losing the biography.
@@ -136,7 +137,7 @@ Rebuilds are safe to interrupt:
 
 ### Logs
 
-Ingestion logs every fetched URL and relative file path, HTML byte counts, saved Markdown destinations, database batches and errors. Vectorization logs batch progress, document and chunk totals, and failures. To keep a debug log:
+Ingestion logs every fetched URL and relative file path, HTML byte counts, database batches and errors. Vectorization logs batch progress, document and chunk totals, and failures. To keep a debug log:
 
 ```sh
 pnpm ingest 2>&1 | tee ingestion.log

@@ -4,10 +4,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IngestionRunEntity } from '../entities/ingestion-run.entity';
 import { batches } from '../utils/batches';
 import { withDocumentWorkflowLock } from '../utils/document-workflow-lock';
-import { CapturedPage, scrapeAll } from './scrapers';
+import { scrapeAll } from './scrapers';
 import { SOURCE_BATCH_SIZE, SourceDocumentService } from './source-document.service';
-import { MARKDOWN_DIRECTORY, saveMarkdownFile } from './utils/markdown-file';
-import { removeObsoleteFiles } from './utils/obsolete-captures';
 
 /** Fetch and persist full source documents without invoking the embedding service. */
 @Injectable()
@@ -44,28 +42,17 @@ export class IngestionService {
     };
 
     try {
-      this.logger.log(`Starting ingestion; Markdown directory: ${MARKDOWN_DIRECTORY}`);
+      this.logger.log('Starting ingestion');
       const removed = await this.documents.removeObsolete();
-      await removeObsoleteFiles((message) => this.logger.log(message));
       this.logger.log(`Removed ${removed} obsolete database documents`);
       const pages = await scrapeAll(reportError);
       for (const batch of batches(pages, SOURCE_BATCH_SIZE)) {
-        const saved: CapturedPage[] = [];
-        for (const page of batch) {
-          try {
-            const destination = await saveMarkdownFile(page);
-            this.logger.log(`Saved Markdown: ${page.source} -> ${destination}`);
-            saved.push(page);
-          } catch (error) {
-            reportError(`${page.path} (${page.source}): ${String(error)}`);
-          }
-        }
         try {
-          await this.documents.saveBatch(saved);
-          record.updated += saved.length;
-          this.logger.log(`Stored ${saved.length} source documents in the database`);
+          await this.documents.saveBatch(batch);
+          record.updated += batch.length;
+          this.logger.log(`Stored ${batch.length} source documents in the database`);
         } catch (error) {
-          for (const page of saved)
+          for (const page of batch)
             reportError(`${page.path}: database save failed: ${String(error)}`);
         }
       }

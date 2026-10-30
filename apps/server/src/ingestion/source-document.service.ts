@@ -1,9 +1,11 @@
+import { rm } from 'node:fs/promises';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Like, MoreThan, Not } from 'typeorm';
 import { SourceDocumentEntity } from '../entities/source-document.entity';
 import type { CapturedPage } from './types';
 import { contentHash } from './utils/content-hash';
+import { MARKDOWN_DIRECTORY, saveMarkdownFile } from './utils/markdown-file';
 import { isObsoleteCapture, RETIRED_HOMEPAGE_PATHS } from './utils/obsolete-captures';
 
 export const SOURCE_BATCH_SIZE = 100;
@@ -80,5 +82,20 @@ export class SourceDocumentService {
       yield documents;
       lastId = documents[documents.length - 1].id;
     }
+  }
+
+  /** Recreate the Markdown directory from the stored archive; when sources share a path, the newest wins. */
+  async exportMarkdown(): Promise<{ directory: string; written: number }> {
+    await rm(MARKDOWN_DIRECTORY, { recursive: true, force: true });
+    const written = new Map<string, Date>();
+    for await (const batch of this.readBatches()) {
+      for (const document of batch) {
+        const previous = written.get(document.path);
+        if (previous && previous >= document.updatedAt) continue;
+        await saveMarkdownFile(document);
+        written.set(document.path, document.updatedAt);
+      }
+    }
+    return { directory: MARKDOWN_DIRECTORY, written: written.size };
   }
 }

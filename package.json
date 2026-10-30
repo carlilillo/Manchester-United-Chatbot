@@ -12,6 +12,7 @@
     "db:revert": "pnpm --filter @united/server db:revert",
     "db:setup": "pnpm --filter @united/server db:setup",
     "ingest": "pnpm --filter @united/server ingest",
-    "vectorize": "pnpm --filter @united/server vectorize"
+    "vectorize": "pnpm --filter @united/server vectorize",
+    "export:markdown": "pnpm --filter @united/server export:markdown"
   }
 }

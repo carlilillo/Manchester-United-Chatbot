@@ -6,13 +6,14 @@ import { AppModule } from './app.module';
 import { PersistenceService } from './services/persistence.service';
 import { IngestionService } from './ingestion/ingestion.service';
 import { IngestionModule } from './ingestion/ingestion.module';
+import { SourceDocumentService } from './ingestion/source-document.service';
 import { VectorModule } from './vector/vector.module';
 import { VectorizationService } from './vector/vectorization.service';
 
 /** Apply schema changes, then start only the services required by the requested workflow. */
 async function main() {
   const command = process.argv[2];
-  if (!['migrate', 'revert', 'setup', 'ingest', 'vectorize'].includes(command)) {
+  if (!['migrate', 'revert', 'setup', 'ingest', 'vectorize', 'export-markdown'].includes(command)) {
     throw new Error(`Unknown command: ${command}`);
   }
   const db = createWorkflowDataSource();
@@ -32,14 +33,21 @@ async function main() {
   } finally {
     await db.destroy();
   }
-  if (command === 'setup' || command === 'ingest' || command === 'vectorize') {
+  if (['setup', 'ingest', 'vectorize', 'export-markdown'].includes(command)) {
     const module =
-      command === 'ingest' ? IngestionModule : command === 'vectorize' ? VectorModule : AppModule;
+      command === 'ingest' || command === 'export-markdown'
+        ? IngestionModule
+        : command === 'vectorize'
+          ? VectorModule
+          : AppModule;
     const app = await NestFactory.createApplicationContext(module);
     try {
       if (command === 'setup') await app.get(PersistenceService).setup();
       if (command === 'ingest') console.log(await app.get(IngestionService).run());
       if (command === 'vectorize') console.log(await app.get(VectorizationService).run());
+      if (command === 'export-markdown') {
+        console.log(await app.get(SourceDocumentService).exportMarkdown());
+      }
     } finally {
       await app.close();
     }

@@ -46,8 +46,7 @@ RUN rm -rf node_modules && \
 
 # ---- client-build: compile contracts and the Vite bundle ----
 FROM deps AS client-build
-# Optional public origin for canonical and social-image URLs (see apps/client/build).
-ARG SITE_URL=
+ARG SITE_URL=https://manchester-united-chatbot.up.railway.app
 ENV SITE_URL=${SITE_URL}
 RUN pnpm install --frozen-lockfile --offline --filter @united/client...
 COPY packages/contracts packages/contracts

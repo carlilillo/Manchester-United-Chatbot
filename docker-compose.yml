@@ -1,0 +1,54 @@
+# Only the client is published. It serves the app and proxies /api to the server,
+# which has no host port and is reachable only on the private "backend" network.
+#
+#   docker compose up --build
+#   open http://localhost:8080
+
+name: united-archive
+
+services:
+  client:
+    build:
+      context: .
+      target: client
+      args:
+        SITE_URL: ${SITE_URL:-}
+    ports:
+      - "${CLIENT_PORT:-8080}:8080"
+    depends_on:
+      - server
+    networks:
+      - backend
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      target: server
+    env_file:
+      - .env
+      # Container-only overrides (gitignored), e.g. DATABASE_URL pointing at
+      # host.docker.internal instead of 127.0.0.1, which is the container itself.
+      - path: .env.docker
+        required: false
+    environment:
+      # Browsers only see the client origin, so CORS is limited to it.
+      CLIENT_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+      PORT: "3000"
+    expose:
+      - "3000"
+    extra_hosts:
+      # Lets DATABASE_URL point at a Postgres running on the Docker host.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - scraped-data:/app/apps/server/man_united_data_script
+    networks:
+      - backend
+    restart: unless-stopped
+
+networks:
+  # Not "internal": the server still needs outbound access to OpenAI and the scraped sites.
+  backend:
+
+volumes:
+  scraped-data:

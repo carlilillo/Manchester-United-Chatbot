@@ -40,8 +40,6 @@ services:
     extra_hosts:
       # Lets DATABASE_URL point at a Postgres running on the Docker host.
       - "host.docker.internal:host-gateway"
-    volumes:
-      - scraped-data:/app/apps/server/man_united_data_script
     networks:
       - backend
     restart: unless-stopped
@@ -49,6 +47,3 @@ services:
 networks:
   # Not "internal": the server still needs outbound access to OpenAI and the scraped sites.
   backend:
-
-volumes:
-  scraped-data:

@@ -3,9 +3,11 @@
 # One workspace build, two images. Normally run through docker-compose.yml:
 #   docker build --target server -t united-server .
 #   docker build --target client -t united-client .
+# or, without --target: docker build --build-arg APP_TARGET=client .
 
 ARG NODE_IMAGE=node:22.23.4-alpine3.24
 ARG NGINX_IMAGE=nginxinc/nginx-unprivileged:1.30.6-alpine3.24
+ARG APP_TARGET=server
 
 # ---- base: Node + pnpm (version pinned by the root packageManager field) ----
 FROM ${NODE_IMAGE} AS base
@@ -54,7 +56,10 @@ RUN pnpm --filter @united/contracts build && pnpm --filter @united/client build
 
 # ---- client: static files + /api reverse proxy (public entry point) ----
 FROM ${NGINX_IMAGE} AS client
-COPY apps/client/nginx.conf /etc/nginx/conf.d/default.conf
+ENV PORT=8080 \
+    API_UPSTREAM=server:3000 \
+    NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+COPY apps/client/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=client-build /app/apps/client/dist /usr/share/nginx/html
 EXPOSE 8080
 
@@ -74,10 +79,15 @@ COPY --from=server-build --chown=node:node /app/apps/server/package.json /app/ap
 COPY --from=server-build --chown=node:node /app/apps/server/dist ./apps/server/dist
 COPY --from=server-build --chown=node:node /app/apps/server/skills ./apps/server/skills
 
-# Ingestion writes scraped markdown here.
-RUN mkdir -p apps/server/man_united_data_script && chown node:node apps/server/man_united_data_script
+# Ingestion deletes and recreates its markdown export here, so the parent must be writable.
+RUN chown node:node apps/server
 
 USER node
 WORKDIR /app/apps/server
 EXPOSE 3000
 CMD ["node", "dist/main.js"]
+
+# ---- default image: picked by APP_TARGET (client | server) ----
+# Lets hosts that build one Dockerfile per service without a --target flag
+# (e.g. Railway, via a service variable) choose which image to produce.
+FROM ${APP_TARGET} AS app

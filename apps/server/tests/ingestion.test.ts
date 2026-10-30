@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { IngestionService } from '../src/ingestion/ingestion.service';
-import { scrapeAll } from '../src/ingestion/scrapers';
+import { INGESTION_TOPICS } from '../src/ingestion/schedules';
+import { scrapeTopics } from '../src/ingestion/scrapers';
 
 vi.mock('../src/config/env', () => ({ env: () => ({}) }));
-vi.mock('../src/ingestion/scrapers', () => ({ scrapeAll: vi.fn() }));
+vi.mock('../src/ingestion/scrapers', () => ({ scrapeTopics: vi.fn() }));
 vi.mock('node:fs/promises', () => ({ mkdir: vi.fn(), writeFile: vi.fn(), rm: vi.fn() }));
 
 const page = {
@@ -16,7 +17,11 @@ const page = {
 };
 
 function setup() {
-  const repository = { create: vi.fn((value) => value), save: vi.fn(async (value) => value) };
+  const repository = {
+    create: vi.fn((value) => value),
+    save: vi.fn(async (value) => value),
+    findOne: vi.fn(),
+  };
   const runner = {
     connect: vi.fn(),
     query: vi.fn().mockResolvedValue([{ acquired: true }]),
@@ -33,7 +38,7 @@ function setup() {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(scrapeAll).mockResolvedValue([page]);
+  vi.mocked(scrapeTopics).mockResolvedValue([page]);
   vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
   vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 });
@@ -46,7 +51,7 @@ describe('source ingestion without embeddings', () => {
       ...page,
       path: `news/articles/story-${index}.md`,
     }));
-    vi.mocked(scrapeAll).mockResolvedValue(pages);
+    vi.mocked(scrapeTopics).mockResolvedValue(pages);
 
     await expect(service.run()).resolves.toMatchObject({
       status: 'completed',
@@ -80,10 +85,38 @@ describe('source ingestion without embeddings', () => {
     );
   });
 
+  it('scrapes and records every topic by default, or only the requested ones', async () => {
+    const { service, repository } = setup();
+    await service.run();
+    expect(scrapeTopics).toHaveBeenLastCalledWith(INGESTION_TOPICS, expect.any(Function));
+    expect(repository.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ topics: [...INGESTION_TOPICS] }),
+    );
+    await service.run(['matches', 'store']);
+    expect(scrapeTopics).toHaveBeenLastCalledWith(['matches', 'store'], expect.any(Function));
+    expect(repository.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ topics: ['matches', 'store'] }),
+    );
+  });
+
+  it('finds the latest successful run that captured all of the given topics', async () => {
+    const { service, repository } = setup();
+    const startedAt = new Date('2026-10-01T06:00:00Z');
+    repository.findOne.mockResolvedValue({ id: 'run', startedAt });
+    await expect(service.lastCapturedAt(['matches', 'store'])).resolves.toBe(startedAt);
+    const query = repository.findOne.mock.calls[0][0];
+    expect(query.where.status.value).toEqual(['completed', 'partial']);
+    expect(query.where.topics.type).toBe('arrayContains');
+    expect(query.where.topics.value).toEqual(['matches', 'store']);
+    expect(query.order).toEqual({ startedAt: 'DESC' });
+    repository.findOne.mockResolvedValue(null);
+    await expect(service.lastCapturedAt(['travel'])).resolves.toBeUndefined();
+  });
+
   it('logs and records scrape failures while saving successful pages', async () => {
     const { service } = setup();
     const failure = 'https://tickets.manutd.com/memberships: HTTP 403';
-    vi.mocked(scrapeAll).mockImplementation(async (reportError) => {
+    vi.mocked(scrapeTopics).mockImplementation(async (_topics, reportError) => {
       reportError(failure);
       return [page];
     });
@@ -108,7 +141,7 @@ describe('source ingestion without embeddings', () => {
     const { service, runner } = setup();
     runner.query.mockResolvedValueOnce([{ acquired: false }]);
     await expect(service.run()).resolves.toEqual({ status: 'already-running' });
-    expect(scrapeAll).not.toHaveBeenCalled();
+    expect(scrapeTopics).not.toHaveBeenCalled();
     expect(runner.release).toHaveBeenCalledOnce();
   });
 });

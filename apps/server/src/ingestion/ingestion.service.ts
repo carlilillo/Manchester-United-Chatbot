@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { ArrayContains, DataSource, In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IngestionRunEntity } from '../entities/ingestion-run.entity';
 import { batches } from '../utils/batches';
 import { withDocumentWorkflowLock } from '../utils/document-workflow-lock';
-import { scrapeAll } from './scrapers';
+import { INGESTION_TOPICS, type IngestionTopic } from './schedules';
+import { scrapeTopics } from './scrapers';
 import { SOURCE_BATCH_SIZE, SourceDocumentService } from './source-document.service';
 
 /** Fetch and persist full source documents without invoking the embedding service. */
@@ -18,17 +19,28 @@ export class IngestionService {
     @InjectRepository(IngestionRunEntity) private readonly runs: Repository<IngestionRunEntity>,
   ) {}
 
-  /** Run an exclusive capture, keeping it separate from vectorization. */
-  async run() {
-    return withDocumentWorkflowLock(this.database, () => this.captureDocuments());
+  /** Run an exclusive capture of the given topics, keeping it separate from vectorization. */
+  async run(topics: readonly IngestionTopic[] = INGESTION_TOPICS) {
+    return withDocumentWorkflowLock(this.database, () => this.captureDocuments(topics));
+  }
+
+  /** When all of these topics were last captured together, counting runs with partial failures. */
+  async lastCapturedAt(topics: readonly IngestionTopic[]): Promise<Date | undefined> {
+    const run = await this.runs.findOne({
+      where: { status: In(['completed', 'partial']), topics: ArrayContains([...topics]) },
+      order: { startedAt: 'DESC' },
+      select: { id: true, startedAt: true },
+    });
+    return run?.startedAt;
   }
 
   /** Record fetch/storage failures while retaining successful captures for later indexing. */
-  private async captureDocuments() {
+  private async captureDocuments(topics: readonly IngestionTopic[]) {
     const repository = this.runs;
     const record = await repository.save(
       repository.create({
         status: 'running',
+        topics: [...topics],
         updated: 0,
         failed: 0,
         errors: [],
@@ -42,10 +54,10 @@ export class IngestionService {
     };
 
     try {
-      this.logger.log('Starting ingestion');
+      this.logger.log(`Starting ingestion: ${topics.join(', ')}`);
       const removed = await this.documents.removeObsolete();
       this.logger.log(`Removed ${removed} obsolete database documents`);
-      const pages = await scrapeAll(reportError);
+      const pages = await scrapeTopics(topics, reportError);
       for (const batch of batches(pages, SOURCE_BATCH_SIZE)) {
         try {
           await this.documents.saveBatch(batch);

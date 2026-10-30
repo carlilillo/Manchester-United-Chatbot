@@ -6,6 +6,7 @@ import { scrapeMembership } from './topics/membership';
 import { scrapeStore } from './topics/store';
 import { scrapePeople } from './topics/people';
 import { scrapeHomepage } from './topics/homepage';
+import type { IngestionTopic } from './schedules';
 import { ScrapeSession } from './utils/scrape-session';
 import { CLUB, nameFor } from './utils/source-links';
 import type { CapturedPage } from './types';
@@ -32,22 +33,41 @@ function womenVideoLinks(html: string): string[] {
   return [...found];
 }
 
-/** Run topic-specific extraction with shared request limits and per-source error reporting. */
-export async function scrapeAll(error: (message: string) => void): Promise<CapturedPage[]> {
+/** Run extraction for the requested topics with shared request limits and per-source error reporting. */
+export async function scrapeTopics(
+  topics: readonly IngestionTopic[],
+  error: (message: string) => void,
+): Promise<CapturedPage[]> {
   const session = new ScrapeSession(error);
+  const selected = new Set(topics);
   const season = process.env.SEASON_ID || '20262027';
-  const homeHtml = await scrapeHomepage(session);
-  await scrapeNews(session, env().NEWS_PAGES);
-  await scrapeMatches(session, season);
-  await scrapePeople(session);
-  await scrapeMembership(session, season);
-  await scrapeStore(session);
-  await session.capture(
-    `${CLUB}/en/club/visit-old-trafford/getting-here`,
-    'travel/getting-here.md',
-    'travel',
-  );
+  const homeHtml = selected.has('homepage') ? await scrapeHomepage(session) : undefined;
+  if (selected.has('news')) await scrapeNews(session, env().NEWS_PAGES);
+  if (selected.has('matches')) await scrapeMatches(session, season);
+  if (selected.has('people')) await scrapePeople(session);
+  if (selected.has('membership')) await scrapeMembership(session, season);
+  if (selected.has('store')) await scrapeStore(session);
+  if (selected.has('travel')) {
+    await session.capture(
+      `${CLUB}/en/club/visit-old-trafford/getting-here`,
+      'travel/getting-here.md',
+      'travel',
+    );
+  }
+  if (selected.has('videos')) await scrapeVideos(session, homeHtml);
+  return session.pages;
+}
 
+/** Video links are discovered on the homepage, which is fetched again only when not captured. */
+async function scrapeVideos(session: ScrapeSession, homeHtml?: string): Promise<void> {
+  if (homeHtml === undefined) {
+    try {
+      homeHtml = await session.html(`${CLUB}/en`, 'videos/women.md');
+    } catch (error) {
+      session.reportError(`${CLUB}/en: ${String(error)}`);
+      return;
+    }
+  }
   const videos = womenVideoLinks(homeHtml);
   if (videos.length) {
     session.add(
@@ -58,5 +78,4 @@ export async function scrapeAll(error: (message: string) => void): Promise<Captu
     );
   }
   await session.details(videos, 'videos/women', 'videos');
-  return session.pages;
 }

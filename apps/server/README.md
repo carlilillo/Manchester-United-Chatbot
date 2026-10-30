@@ -37,7 +37,6 @@ The server reads the `.env` file at the repository root, so copy `.env.example` 
 | `CLIENT_ORIGIN`      | `http://localhost:5173` | Allowed CORS origin                                             |
 | `PORT`               | `3000`                  | HTTP port                                                       |
 | `OPENAI_CHAT_MODEL`  | `gpt-6.1-sol`           | Chat model for both agents                                      |
-| `INGEST_CRON`        | `0 3 * * *`             | Daily refresh schedule, evaluated in `Europe/Dublin`            |
 | `NEWS_PAGES`         | `20`                    | Number of news listing pages to scrape (1–100)                  |
 | `SEASON_ID`          | `20262027`              | Season used for standings                                       |
 
@@ -53,7 +52,7 @@ Run these from the repository root. The root scripts forward to this package.
 pnpm db:setup     # create the schema, run migrations, initialize LangGraph and pgvector tables
 pnpm db:migrate   # apply pending TypeORM migrations only
 pnpm db:revert    # revert the latest TypeORM migration
-pnpm ingest       # fetch pages and store full source documents
+pnpm ingest       # fetch every topic and store full source documents (`pnpm ingest news matches` for some)
 pnpm vectorize    # rebuild the vector index from stored documents
 pnpm export:markdown  # write stored source documents to man_united_data_script/ for inspection
 pnpm --filter @united/server dev     # API only, at http://localhost:3000/api
@@ -64,7 +63,16 @@ Run `pnpm db:setup` once before first starting the server on a fresh database. `
 
 The two workflows are independent. Ingestion does not create embeddings, and vectorization does not fetch websites. After changing extraction code, run `pnpm ingest` and then `pnpm vectorize`. The Markdown export is read-only: editing exported files updates neither the database documents nor the embeddings.
 
-`RefreshService` runs ingestion followed by vectorization on the `INGEST_CRON` schedule (03:00 `Europe/Dublin` by default).
+`RefreshService` registers one cron job per refresh frequency. The schedules live in `src/ingestion/schedules.ts`:
+
+| Job                    | Every   | Topics                       |
+| ---------------------- | ------- | ---------------------------- |
+| `ingest-daily`         | 1 day   | `homepage`, `news`, `videos` |
+| `ingest-every-3-days`  | 3 days  | `matches`, `store`           |
+| `ingest-every-30-days` | 30 days | `membership`, `people`       |
+| `ingest-every-45-days` | 45 days | `travel`                     |
+
+Cron cannot express intervals such as 45 days. Instead, every job ticks at 06:00 `Europe/Dublin` and runs only once its interval has passed since the last `completed` or `partial` run that captured all of its topics. Each run records its topics in `ingestion_runs.topics`, and manual `pnpm ingest` runs count too. Ticks run one at a time. The first due tick ingests every due schedule together, followed by a single vectorization, so later ticks that morning find nothing due. A schedule skipped because the workflow lock was busy, or because the server was down, runs on the next morning's tick.
 
 ## Source layout
 

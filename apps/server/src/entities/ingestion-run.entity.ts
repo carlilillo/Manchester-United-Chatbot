@@ -14,6 +14,10 @@ export class IngestionRunEntity {
   @Column('int', { default: 0 })
   failed!: number;
 
+  /** Topics this run scraped; the refresh scheduler reads them to decide what is due. */
+  @Column('text', { array: true })
+  topics!: string[];
+
   @Column('jsonb', { default: () => "'[]'::jsonb" })
   errors!: string[];
 
